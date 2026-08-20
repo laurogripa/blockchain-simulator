@@ -6,6 +6,11 @@ import { Rng } from './rng';
 
 let txCounter = 0;
 
+/** Test/scenario-only: makes txid generation reproducible across repeated runs in one process. */
+export function resetTxCounter(): void {
+  txCounter = 0;
+}
+
 /** Builds a synthetic tx spending a random unspent output owned by an address the node knows about. */
 export function makeRandomTx(
   utxo: Map<Outpoint, UtxoEntry>,

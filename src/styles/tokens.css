@@ -33,6 +33,15 @@
   --miner-M4: #f0654f; /* red */
   --miner-M5: #4fd1c5; /* cyan */
 
+  /* coinbase outputs pay each miner's own address (M1..M5) — alias so --addr-<id> chips
+     (UtxoChip, TxChip) render in the same hue as that miner's node/block color, making
+     "this coin came from mining" visually distinct from a regular A..F user output. */
+  --addr-M1: var(--miner-M1);
+  --addr-M2: var(--miner-M2);
+  --addr-M3: var(--miner-M3);
+  --addr-M4: var(--miner-M4);
+  --addr-M5: var(--miner-M5);
+
   --radius: 2px;
   --font-ui: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;

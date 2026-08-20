@@ -19,6 +19,7 @@ import { makeGenesisBlock, GENESIS_HASH } from './chain';
 import { applyBlock } from './utxo';
 import { buildCandidateTemplate, finalizeBlock } from './miner';
 import { makeRandomTx } from './mempool';
+import { runScenario, SCENARIO_LENGTH, type ScenarioState } from './scenarios';
 import {
   EXPECTED_HASHES,
   TARGET_BLOCK_TIME_SIM_MS,
@@ -424,6 +425,31 @@ export class SimEngine {
       const tipBlock = this.blocks.get(node.tip);
       if (tipBlock) this.floodBlock(node.id, tipBlock);
     }
+    this.dirty = true;
+  }
+
+  // ---- scripted 64-block scenario ----
+  /**
+   * Replaces the (still-genesis-only, since this must run before start()) chain with the
+   * deterministic 64-block scenario's end state: every node/miner adopts its resulting chain,
+   * UTXO set, and mempool, so the story is already "told" the instant the sim goes live. Mining
+   * then continues forward from block 64 as normal — this seeds history, it doesn't freeze it.
+   */
+  loadScenario() {
+    const state: ScenarioState = runScenario();
+    this.blocks = new Map(state.blocks);
+    const known = new Set(state.blocks.keys());
+    for (const node of this.nodes.values()) {
+      node.tip = state.network.tip;
+      node.known = new Set(known);
+      node.firstSeen = new Map(state.network.firstSeen);
+      node.utxo = new Map(state.network.utxo);
+      node.mempool = new Map(state.network.mempool);
+    }
+    this.simNow = state.now;
+    this.lastMinedBy = null;
+    for (const line of state.log) this.logEvent('block', line);
+    this.logEvent('block', `scripted scenario loaded: ${SCENARIO_LENGTH - 1} blocks of Bitcoin's history in miniature`);
     this.dirty = true;
   }
 
