@@ -1,0 +1,105 @@
+@import './tokens.css';
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,0.18) 0%, transparent 6%),
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.005em;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  overflow: auto;
+}
+
+.panel-title {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+button:hover { background: #2e3021; border-color: #52543a; }
+button:active { transform: translateY(1px); }
+button.active { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.mono { font-family: var(--font-mono); letter-spacing: 0; }
+
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+svg text { user-select: none; font-family: var(--font-ui); }
+
+.tooltip {
+  position: fixed;
+  background: #0c0d08;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  pointer-events: none;
+  z-index: 1000;
+  max-width: 340px;
+  word-break: break-all;
+}
+
+/* ---- signature: the wax-ink seal a mined block carries ------------------------------ */
+/* A block is only real once proof-of-work seals it — literalized as a rotated ink stamp
+   bearing the hash fragment, the one deliberately loud gesture on an otherwise quiet page. */
+.seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  color: var(--good);
+  transform: rotate(-7deg);
+  opacity: 0.85;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px currentColor inset;
+}
+.seal.seal-void {
+  color: var(--danger);
+  transform: rotate(-4deg);
+  border-style: double;
+}

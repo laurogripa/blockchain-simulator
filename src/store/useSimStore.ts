@@ -1,0 +1,98 @@
+import { create } from 'zustand';
+import type { Hash, LogEvent, NodeId, Packet, SimMode, Txid } from '../engine/types';
+
+export interface NodeView {
+  id: NodeId;
+  kind: 'full' | 'miner';
+  x: number;
+  y: number;
+  tip: Hash;
+  mempoolSize: number;
+  utxoCount: number;
+  reorgFlashUntil: number;
+  partitioned: boolean;
+  partitionGroup: number;
+}
+
+export interface MinerView extends NodeView {
+  hashPower: number;
+  status: 'idle' | 'grinding' | 'paused';
+  hashesDone: number;
+  templateTxCount: number;
+}
+
+export interface BlockView {
+  hash: Hash;
+  prevHash: Hash;
+  height: number;
+  cumulativeWork: number;
+  txCount: number;
+  minedBy: string;
+  timestamp: number;
+  merkleRoot: string;
+  nonce: number;
+  bits: number;
+  isOrphan: boolean;
+}
+
+interface SimStoreState {
+  simNow: number;
+  speed: number;
+  mode: SimMode;
+  running: boolean;
+  nodes: Record<NodeId, NodeView>;
+  miners: Record<NodeId, MinerView>;
+  blockIndex: Record<Hash, BlockView>;
+  tips: Hash[];
+  activeChain: Hash[];
+  packets: Packet[];
+  focusedNode: NodeId;
+  selectedBlock: Hash | null;
+  selectedTx: Txid | null;
+  events: LogEvent[];
+  networkEdges: { a: NodeId; b: NodeId }[];
+  partitionActive: boolean;
+  inspectedBlock: Hash | null; // drives BlockModal
+  inspectedMiner: NodeId | null; // drives MinerModal
+  lastMinedBy: NodeId | null; // most recent block's miner — highlighted on the graph
+
+  setFocusedNode: (id: NodeId) => void;
+  setSelectedBlock: (h: Hash | null) => void;
+  setSelectedTx: (t: Txid | null) => void;
+  openBlockModal: (h: Hash) => void;
+  closeBlockModal: () => void;
+  openMinerModal: (id: NodeId) => void;
+  closeMinerModal: () => void;
+}
+
+export const useSimStore = create<SimStoreState>((set) => ({
+  simNow: 0,
+  speed: 100,
+  mode: 'auto',
+  running: true,
+  nodes: {},
+  miners: {},
+  blockIndex: {},
+  tips: [],
+  activeChain: [],
+  packets: [],
+  focusedNode: '',
+  selectedBlock: null,
+  selectedTx: null,
+  events: [],
+  networkEdges: [],
+  partitionActive: false,
+  inspectedBlock: null,
+  inspectedMiner: null,
+  lastMinedBy: null,
+
+  setFocusedNode: (id) => set({ focusedNode: id, selectedBlock: null, selectedTx: null }),
+  setSelectedBlock: (h) => set({ selectedBlock: h, selectedTx: null }),
+  setSelectedTx: (t) => set({ selectedTx: t }),
+  openBlockModal: (h) => set({ inspectedBlock: h, selectedBlock: h, selectedTx: null }),
+  closeBlockModal: () => set({ inspectedBlock: null }),
+  openMinerModal: (id) => set({ inspectedMiner: id }),
+  closeMinerModal: () => set({ inspectedMiner: null }),
+}));
+
+export type { SimStoreState };
