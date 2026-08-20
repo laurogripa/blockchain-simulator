@@ -9,13 +9,10 @@ html, body, #root {
 
 body {
   background: var(--bg);
-  background-image:
-    linear-gradient(180deg, rgba(0,0,0,0.18) 0%, transparent 6%),
-    repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 13px;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 
 .panel {
@@ -50,7 +47,7 @@ button {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-button:hover { background: #2e3021; border-color: #52543a; }
+button:hover { background: #1d222a; border-color: #384049; }
 button:active { transform: translateY(1px); }
 button.active { border-color: var(--accent); color: var(--accent); }
 button:disabled { opacity: 0.4; cursor: default; }
@@ -58,17 +55,16 @@ button:disabled { opacity: 0.4; cursor: default; }
 .mono { font-family: var(--font-mono); letter-spacing: 0; }
 
 .display {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
+  font-family: var(--font-mono);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 svg text { user-select: none; font-family: var(--font-ui); }
 
 .tooltip {
   position: fixed;
-  background: #0c0d08;
+  background: #05070a;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 6px 8px;

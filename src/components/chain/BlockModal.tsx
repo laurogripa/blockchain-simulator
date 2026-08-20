@@ -25,6 +25,7 @@ export function BlockModal() {
   const [merkleRoot, setMerkleRoot] = useState('');
   const [mining, setMining] = useState(false);
   const [hashesTried, setHashesTried] = useState(0);
+  const [tab, setTab] = useState<'header' | 'txs'>('header');
   const miningRef = useRef(false);
 
   // Reset the scratch fields whenever a different block is opened.
@@ -36,6 +37,7 @@ export function BlockModal() {
     setMining(false);
     setHashesTried(0);
     miningRef.current = false;
+    setTab('header');
   }, [block]);
 
   useEffect(() => {
@@ -137,64 +139,13 @@ export function BlockModal() {
           <button onClick={closeBlockModal}>×</button>
         </div>
 
-        <Field label="hash (committed)">
-          <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)' }}>
-            {block.hash}
-          </span>
-        </Field>
-
-        <Field label="hash (live, from fields below)">
+        <Field label="hash (live, from header fields)">
           <span
             className="mono"
             style={{ wordBreak: 'break-all', color: isValid ? 'var(--good)' : 'var(--danger)' }}
           >
             {liveHash}
           </span>
-        </Field>
-
-        <Field label="target">
-          <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)', fontSize: 10 }}>
-            {target}
-          </span>
-        </Field>
-
-        <Field label="prev hash">
-          <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)' }}>
-            {block.header.prevHash}
-          </span>
-        </Field>
-
-        <Field label="merkle root">
-          <input
-            className="mono"
-            style={inputStyle}
-            value={merkleRoot}
-            onChange={(e) => setMerkleRoot(e.target.value)}
-          />
-        </Field>
-
-        <Field label="timestamp">
-          <input
-            type="number"
-            className="mono"
-            style={inputStyle}
-            value={timestamp}
-            onChange={(e) => setTimestamp(Number(e.target.value))}
-          />
-        </Field>
-
-        <Field label="nonce">
-          <input
-            type="number"
-            className="mono"
-            style={inputStyle}
-            value={nonce}
-            onChange={(e) => setNonce(Number(e.target.value))}
-          />
-        </Field>
-
-        <Field label="bits (fixed)">
-          <span className="mono">{block.header.bits}</span>
         </Field>
 
         <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
@@ -227,22 +178,119 @@ export function BlockModal() {
           </div>
         )}
 
-        <div className="panel-title">transactions ({block.txs.length})</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {block.txs.map((tx) => (
-            <div
-              key={tx.txid}
-              className="mono"
-              style={{ fontSize: 10, display: 'flex', justifyContent: 'space-between', gap: 8, color: 'var(--text-dim)' }}
-            >
-              <span>{tx.isCoinbase ? 'coinbase' : tx.txid.slice(0, 10)}</span>
-              <span>{tx.outputs.map((o) => `${o.address}:${o.value}`).join(' ')}</span>
-              <span>{tx.isCoinbase ? '' : `fee-rate ${feeRate(tx).toFixed(3)}`}</span>
-            </div>
-          ))}
+        <div style={{ display: 'flex', gap: 2, marginBottom: 10, borderBottom: '1px solid var(--border)' }}>
+          <TabButton label="header" active={tab === 'header'} onClick={() => setTab('header')} />
+          <TabButton label={`transactions (${block.txs.length})`} active={tab === 'txs'} onClick={() => setTab('txs')} />
         </div>
+
+        {tab === 'header' && (
+          <>
+            <Field label="hash (committed)">
+              <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)' }}>
+                {block.hash}
+              </span>
+            </Field>
+
+            <Field label="target">
+              <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)', fontSize: 10 }}>
+                {target}
+              </span>
+            </Field>
+
+            <Field label="prev hash">
+              <span className="mono" style={{ wordBreak: 'break-all', color: 'var(--text-dim)' }}>
+                {block.header.prevHash}
+              </span>
+            </Field>
+
+            <Field label="merkle root">
+              <input
+                className="mono"
+                style={inputStyle}
+                value={merkleRoot}
+                onChange={(e) => setMerkleRoot(e.target.value)}
+              />
+            </Field>
+
+            <Field label="timestamp">
+              <input
+                type="number"
+                className="mono"
+                style={inputStyle}
+                value={timestamp}
+                onChange={(e) => setTimestamp(Number(e.target.value))}
+              />
+            </Field>
+
+            <Field label="nonce">
+              <input
+                type="number"
+                className="mono"
+                style={inputStyle}
+                value={nonce}
+                onChange={(e) => setNonce(Number(e.target.value))}
+              />
+            </Field>
+
+            <Field label="bits (fixed)">
+              <span className="mono">{block.header.bits}</span>
+            </Field>
+          </>
+        )}
+
+        {tab === 'txs' && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr auto',
+              columnGap: 12,
+              rowGap: 6,
+              fontSize: 11,
+            }}
+          >
+            <div className="mono" style={{ color: 'var(--text-dim)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em' }}>txid</div>
+            <div className="mono" style={{ color: 'var(--text-dim)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em' }}>outputs</div>
+            <div className="mono" style={{ color: 'var(--text-dim)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'right' }}>fee rate</div>
+            {block.txs.map((tx) => (
+              <div key={tx.txid} className="mono" style={{ display: 'contents' }}>
+                <span style={{ color: tx.isCoinbase ? 'var(--accent)' : 'var(--text)' }}>
+                  {tx.isCoinbase ? '⛏ coinbase' : tx.txid.slice(0, 10)}
+                </span>
+                <span style={{ color: 'var(--text-dim)' }}>
+                  {tx.outputs.map((o, i) => (
+                    <span key={i} style={{ marginRight: 10 }}>
+                      <span style={{ color: `var(--addr-${o.address})` }}>{o.address}</span> {o.value}
+                    </span>
+                  ))}
+                </span>
+                <span style={{ color: 'var(--text-dim)', textAlign: 'right' }}>
+                  {tx.isCoinbase ? '—' : feeRate(tx).toFixed(3)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+        borderRadius: 0,
+        color: active ? 'var(--text)' : 'var(--text-dim)',
+        padding: '6px 10px',
+        fontSize: 10,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

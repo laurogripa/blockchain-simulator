@@ -1,41 +1,39 @@
 /*
-  "Instrument Ledger" — a bookkeeper's ledger built into an engineering instrument panel.
-  A blockchain IS a ledger; mining a block IS sealing an entry. The palette runs on three
-  signal inks (verdigris confirm, brick-ink danger, brass mining/pending) against a warm
-  olive-void, not the generic near-black-plus-one-neon dashboard default. Miners read as
-  distinct physical metals; addresses as muted ledger jewel-tones — never candy-saturated.
+  "Modern TUI" — a terminal dashboard, not a ledger. Cold neutral void, monospace-first
+  (headings included), restrained signal colors with no glow/scanline nostalgia — the
+  lazygit/htop register. Miners and addresses still read as distinct hues, just pulled
+  cooler and flatter than the old brass/verdigris/olive palette.
 */
 :root {
-  --bg: #14150f;
-  --panel: #1c1d15;
-  --panel-2: #26271b;
-  --border: #3c3d2c;
-  --text: #ece6d4;
-  --text-dim: #948f76;
+  --bg: #0b0d10;
+  --panel: #101317;
+  --panel-2: #171b21;
+  --border: #262b33;
+  --text: #d7dce2;
+  --text-dim: #6b7280;
 
-  --accent: #c9a24a;   /* brass — interactive focus, mining */
-  --danger: #b9503f;   /* brick ink — invalid, tampered, orphaned */
-  --good: #5a9668;     /* verdigris — confirmed, valid */
-  --warn: #c9a24a;     /* brass, same family as accent: pending/mining is one signal */
-  --info: #4f7f96;     /* telegraph-wire slate blue — packets, informational */
+  --accent: #4fd1c5;   /* cyan — interactive focus, mining */
+  --danger: #f0654f;   /* red — invalid, tampered, orphaned */
+  --good: #6bcf7f;     /* green — confirmed, valid */
+  --warn: #e8b84f;     /* amber — pending, warnings */
+  --info: #5b8fd9;     /* blue — packets, informational */
 
-  /* six ledger jewel-tones for tx output addresses A..F — muted, not primary-rainbow */
-  --addr-A: #b0524a;
-  --addr-B: #4f7f96;
-  --addr-C: #5a9668;
-  --addr-D: #c9a24a;
-  --addr-E: #8a6a9c;
-  --addr-F: #b8783e;
+  /* six address hues A..F — flat terminal-palette colors, not jewel-tones */
+  --addr-A: #f0654f;
+  --addr-B: #5b8fd9;
+  --addr-C: #6bcf7f;
+  --addr-D: #e8b84f;
+  --addr-E: #b18cf0;
+  --addr-F: #4fd1c5;
 
-  /* five miners as five distinct metals/finishes */
-  --miner-M1: #b8783e; /* copper */
-  --miner-M2: #4f8f7c; /* verdigris */
-  --miner-M3: #6d84a3; /* slate steel */
-  --miner-M4: #a85c3e; /* rust iron */
-  --miner-M5: #b09a4a; /* ochre brass */
+  /* five miners as five distinct terminal hues */
+  --miner-M1: #e8b84f; /* amber */
+  --miner-M2: #6bcf7f; /* green */
+  --miner-M3: #5b8fd9; /* blue */
+  --miner-M4: #f0654f; /* red */
+  --miner-M5: #4fd1c5; /* cyan */
 
-  --radius: 3px;
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
-  --font-ui: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --radius: 2px;
+  --font-ui: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
 }
