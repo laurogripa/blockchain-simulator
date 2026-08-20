@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GENESIS_HASH, cumulativeWorkOf, lowestCommonAncestor, makeGenesisBlock, retarget } from './chain';
+import { GENESIS_HASH, computeBlockHash, cumulativeWorkOf, lowestCommonAncestor, makeGenesisBlock, meetsTarget, retarget } from './chain';
 import { workOfBits } from './constants';
 import type { Block, PeerNode } from './types';
 
@@ -35,6 +35,7 @@ function makeNode(tip: string): PeerNode {
     peers: [],
     known: new Set([tip]),
     tip,
+    clientVersion: 'Bitcoin Core 26.0',
     firstSeen: new Map(),
     mempool: new Map(),
     utxo: new Map(),
@@ -46,11 +47,19 @@ function makeNode(tip: string): PeerNode {
 }
 
 describe('makeGenesisBlock', () => {
-  it('has no parent and pre-mines a spendable UTXO per address', () => {
+  it('has no parent (prevHash is the zero sentinel) and matches the real 50 BTC single-output coinbase', () => {
     const genesis = makeGenesisBlock();
-    expect(genesis.hash).toBe(GENESIS_HASH);
     expect(genesis.header.prevHash).toBe(GENESIS_HASH);
-    expect(genesis.txs[0].outputs).toHaveLength(6);
+    expect(genesis.txs[0].outputs).toEqual([{ address: 'satoshi', value: 5_000_000_000 }]);
+  });
+
+  it("is a genuinely mined block: its hardcoded nonce actually satisfies its own header's PoW target", () => {
+    const genesis = makeGenesisBlock();
+    // Unlike the old placeholder, genesis's hash is real — computed from its header fields —
+    // and is NOT the zero sentinel (that's reserved for "no parent", i.e. header.prevHash).
+    expect(genesis.hash).not.toBe(GENESIS_HASH);
+    expect(computeBlockHash(genesis.header)).toBe(genesis.hash);
+    expect(meetsTarget(genesis.hash, genesis.header.bits)).toBe(true);
   });
 });
 

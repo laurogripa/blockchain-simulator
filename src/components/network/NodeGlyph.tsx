@@ -22,6 +22,7 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
   const focusedNode = useSimStore((s) => s.focusedNode);
   const setFocusedNode = useSimStore((s) => s.setFocusedNode);
   const openMinerModal = useSimStore((s) => s.openMinerModal);
+  const openNodeModal = useSimStore((s) => s.openNodeModal);
   const simNow = useSimStore((s) => s.simNow);
   const lastMinedBy = useSimStore((s) => s.lastMinedBy);
   const isMiner = node.kind === 'miner';
@@ -40,6 +41,7 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
       onClick={() => {
         setFocusedNode(node.id);
         if (isMiner) openMinerModal(node.id);
+        else openNodeModal(node.id);
       }}
       style={{ cursor: 'pointer' }}
     >
@@ -73,7 +75,7 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
 
   // Full nodes keep a hover tooltip with their tip hash (useful for spotting a fork); miners
   // don't — hovering a miner mid-fork was reading as "this hash means something about mining
-  // progress", which it doesn't. Click a miner to inspect it instead.
+  // progress", which it doesn't. Click either kind to open its inspector modal.
   return isMiner ? shape : <Tooltip text={`${node.id} tip:${node.tip}`}>{shape}</Tooltip>;
 }
 

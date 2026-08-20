@@ -5,6 +5,7 @@ import { MempoolPanel } from '../mempool/MempoolPanel';
 import { ChainDag } from '../chain/ChainDag';
 import { BlockModal } from '../chain/BlockModal';
 import { MinerModal } from '../network/MinerModal';
+import { NodeModal } from '../network/NodeModal';
 import { MerkleTree } from '../merkle/MerkleTree';
 
 type MainTab = 'network' | 'merkle';
@@ -49,13 +50,13 @@ export function Dashboard() {
         <MempoolPanel />
       </div>
 
-      <div className="panel" style={{ gridArea: 'chain' }}>
-        <div className="panel-title">chain</div>
+      <div className="panel" style={{ gridArea: 'chain', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <ChainDag />
       </div>
 
       <BlockModal />
       <MinerModal />
+      <NodeModal />
     </div>
   );
 }

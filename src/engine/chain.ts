@@ -1,38 +1,62 @@
 import type { Block, Hash, PeerNode, ReorgEvent } from './types';
 import { applyBlock, revertBlock } from './utxo';
-import { workOfBits, targetHexForBits, DIFFICULTY_BITS } from './constants';
+import { workOfBits, targetHexForBits, DIFFICULTY_BITS, COINBASE_VALUE } from './constants';
 import { sha256dHex } from './crypto/sha256';
 import { serializeHeader } from './serialize';
 
+/** The zero/null-parent sentinel — genesis's own header.prevHash, exactly like real Bitcoin's
+ *  (32 zero bytes). NOT genesis's own hash: genesis is a genuinely mined block (see below), so
+ *  its hash is a real, PoW-valid value like any other block's. */
 export const GENESIS_HASH: Hash = '0'.repeat(64);
 
-/** Genesis pre-mines one output per address so the network has spendable UTXOs from block 0. */
+// Genesis's coinbase, header, and the nonce that actually satisfies its own proof-of-work target
+// — precomputed once (brute-forcing DIFFICULTY_BITS=20 synchronously at every app load would
+// take ~24s in this JS sha256d implementation) and hardcoded here, exactly like every real
+// Bitcoin client ships genesis's real bytes as constants rather than mining it at startup. Real
+// Bitcoin genuinely mined its genesis (nonce 2083236893) — this sim does the equivalent, just
+// once, offline, for its own header/hash function instead of pretending PoW doesn't apply.
+const GENESIS_TXID = 'a0ee05652997523b2bd5e4c23336e0e68847781d1a77a2f73f52927f87b01b91';
+const GENESIS_MERKLE_ROOT = GENESIS_TXID; // single-tx block: merkle root == that tx's id
+const GENESIS_NONCE = 1_820_496;
+const GENESIS_BLOCK_HASH = '0000020557acc392e94ed62cae12767836181477656ba3f1f079cacfb01dcc88';
+
+/**
+ * Matches the real genesis block as closely as this sim can: one 50 BTC coinbase output,
+ * paid to a single (here: fictitious) address — same shape as the real one, which paid Satoshi's
+ * pubkey. And like the real one, it's never added to any node's UTXO set (see engine.ts's setup
+ * and scenarios.ts's runScenario, which both skip applyBlock-ing genesis for this reason) — the
+ * real client's genesis handling never ran the usual "connect this block's coinbase" step, so
+ * those 50 BTC have been permanently unspendable since January 2009. This sim reproduces that
+ * quirk deliberately rather than inventing spendable seed money the real chain never had.
+ */
 export function makeGenesisBlock(): Block {
-  const addresses = ['A', 'B', 'C', 'D', 'E', 'F'];
   const genesisTx = {
-    txid: 'genesis' + '0'.repeat(57),
+    txid: GENESIS_TXID,
     inputs: [],
-    outputs: addresses.map((address) => ({ address, value: 10_000_000_000 })),
+    outputs: [{ address: 'satoshi', value: COINBASE_VALUE }],
     fee: 0,
     size: 100,
     isCoinbase: true,
     createdAt: 0,
+    // The real embedded headline (Bitcoin's actual genesis coinbase scriptSig), Jan 3 2009 —
+    // both a timestamp proof and Satoshi's own commentary on why this needed to exist.
+    message: 'The Times 03/Jan/2009 Chancellor on brink of second bailout for banks',
   };
   return {
-    hash: GENESIS_HASH,
+    hash: GENESIS_BLOCK_HASH,
     header: {
       version: 1,
-      prevHash: '0'.repeat(64),
-      merkleRoot: '0'.repeat(64),
+      prevHash: GENESIS_HASH,
+      merkleRoot: GENESIS_MERKLE_ROOT,
       timestamp: 0,
       bits: DIFFICULTY_BITS,
-      nonce: 0,
+      nonce: GENESIS_NONCE,
     },
     txs: [genesisTx],
     height: 0,
     cumulativeWork: 0,
     minedBy: 'genesis',
-    hashesTried: 0,
+    hashesTried: GENESIS_NONCE,
     undo: [],
   };
 }

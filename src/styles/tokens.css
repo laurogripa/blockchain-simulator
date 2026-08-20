@@ -26,6 +26,10 @@
   --addr-E: #b18cf0;
   --addr-F: #4fd1c5;
 
+  /* genesis's permanently-unspendable 50 BTC output — a muted neutral, distinct from the
+     six active wallet hues since it can never actually hold a spendable position on-screen */
+  --addr-satoshi: #7d8590;
+
   /* five miners as five distinct terminal hues */
   --miner-M1: #e8b84f; /* amber */
   --miner-M2: #6bcf7f; /* green */

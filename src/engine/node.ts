@@ -2,6 +2,18 @@ import type { Block, Hash, PeerNode, Transaction } from './types';
 import { retarget, cumulativeWorkOf } from './chain';
 import type { ReorgEvent } from './types';
 
+// A small spread of real-world Bitcoin Core releases, picked deterministically per node id.
+// This is cosmetic in the sim — every node validates with the exact same consensus rules
+// regardless of which version string it's wearing — but it's a fair picture of the real
+// network, where nodes (and miners) run a mix of client versions at any given time.
+const CLIENT_VERSIONS = ['Bitcoin Core 25.1', 'Bitcoin Core 26.0', 'Bitcoin Core 26.1', 'Bitcoin Core 27.0'];
+
+function pickClientVersion(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return CLIENT_VERSIONS[h % CLIENT_VERSIONS.length];
+}
+
 export function makePeerNode(
   id: string,
   kind: 'full' | 'miner',
@@ -17,6 +29,7 @@ export function makePeerNode(
     peers: [],
     known: new Set([genesis.hash]),
     tip: genesis.hash,
+    clientVersion: pickClientVersion(id),
     firstSeen: new Map([[genesis.hash, 0]]),
     mempool: new Map(),
     utxo: new Map(),

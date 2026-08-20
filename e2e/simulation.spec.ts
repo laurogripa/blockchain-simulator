@@ -16,7 +16,7 @@ test('the scenario picker blocks the sim until a mode is chosen', async ({ page 
   await expect(page.getByText('choose how the network starts')).toBeHidden();
 });
 
-test('picking the 64-block scenario seeds the chain instantly and mining continues live', async ({ page }) => {
+test('picking the 64-block scenario seeds the chain instantly, paused on the final frame', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /64-block scenario/i }).click();
 
@@ -25,6 +25,9 @@ test('picking the 64-block scenario seeds the chain instantly and mining continu
   await expect
     .poll(async () => chainPanel.locator('text=/^h\\d+$/').count(), { timeout: 5_000 })
     .toBeGreaterThan(20);
+
+  // Paused for now (see GOALS.md next-steps) — the play/pause control should read "paused".
+  await expect(page.getByRole('button', { name: '▶' })).toBeVisible();
 });
 
 test('the network graph renders all nodes and the chain grows as the sim runs', async ({ page }) => {

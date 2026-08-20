@@ -16,7 +16,6 @@ import { EventQueue } from './eventQueue';
 import { buildTopology, edgeLatency, type Edge } from './network';
 import { makePeerNode, receiveBlock, receiveTx } from './node';
 import { makeGenesisBlock, GENESIS_HASH } from './chain';
-import { applyBlock } from './utxo';
 import { buildCandidateTemplate, finalizeBlock } from './miner';
 import { makeRandomTx } from './mempool';
 import { runScenario, SCENARIO_LENGTH, type ScenarioState } from './scenarios';
@@ -71,6 +70,7 @@ export class SimEngine {
   gatedAnnouncements: PendingSolution[] | null = null; // when set, solutions accumulate here
   gateMiners = new Set<NodeId>();
   lastMinedBy: NodeId | null = null;
+  genesisHash: Hash = GENESIS_HASH; // overwritten in setup() with the real, mined genesis hash
 
   constructor() {
     this.setup();
@@ -79,13 +79,16 @@ export class SimEngine {
   private setup() {
     const genesis = makeGenesisBlock();
     this.blocks.set(genesis.hash, genesis);
+    this.genesisHash = genesis.hash;
 
     const allIds = [...FULL_NODE_IDS, ...MINER_IDS];
     const positions = layoutPositions(allIds);
 
+    // Note: genesis's coinbase is deliberately NOT applyBlock-ed into any node's UTXO set —
+    // see makeGenesisBlock's doc comment. Every node starts with an empty UTXO set, same as the
+    // real chain did.
     FULL_NODE_IDS.forEach((id) => {
       const node = makePeerNode(id, 'full', positions[id].x, positions[id].y, genesis);
-      applyBlock(node.utxo, genesis);
       this.nodes.set(id, node);
     });
     MINER_IDS.forEach((id) => {
@@ -95,7 +98,6 @@ export class SimEngine {
       node.hashesDone = 0;
       node.status = 'idle';
       node.attempts = [];
-      applyBlock(node.utxo, genesis);
       this.nodes.set(id, node);
     });
 
@@ -490,6 +492,8 @@ export class SimEngine {
         reorgFlashUntil: n.reorgFlashUntil,
         partitioned: n.partitioned,
         partitionGroup: n.partitionGroup,
+        clientVersion: n.clientVersion,
+        peers: n.peers,
       };
       nodes[id] = view;
       if (n.kind === 'miner') {
@@ -505,18 +509,17 @@ export class SimEngine {
     }
 
     const blockIndex: Record<string, BlockView> = {};
-    const activeTip = this.nodes.get(FULL_NODE_IDS[0])?.tip ?? GENESIS_HASH;
+    const activeTip = this.nodes.get(FULL_NODE_IDS[0])?.tip ?? this.genesisHash;
     const activeChain: Hash[] = [];
     let cur: Hash | undefined = activeTip;
     while (cur) {
       const b = this.blocks.get(cur);
       if (!b) break;
       activeChain.unshift(cur);
-      cur = b.header.prevHash === cur ? undefined : b.header.prevHash;
-      if (cur === GENESIS_HASH) {
-        activeChain.unshift(GENESIS_HASH);
-        break;
-      }
+      // Genesis's own hash is a real, mined value (not the GENESIS_HASH sentinel) — the walk
+      // stops once it reaches a block with no real parent, i.e. whose prevHash IS that sentinel.
+      if (b.header.prevHash === GENESIS_HASH) break;
+      cur = b.header.prevHash;
     }
     const activeSet = new Set(activeChain);
     for (const [hash, b] of this.blocks) {
@@ -531,7 +534,7 @@ export class SimEngine {
         merkleRoot: b.header.merkleRoot,
         nonce: b.header.nonce,
         bits: b.header.bits,
-        isOrphan: !activeSet.has(hash) && hash !== GENESIS_HASH,
+        isOrphan: !activeSet.has(hash),
       };
     }
 

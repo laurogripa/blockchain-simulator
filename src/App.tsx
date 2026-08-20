@@ -7,10 +7,8 @@ export default function App() {
   const engine = useEngine();
   const [started, setStarted] = useState(false);
 
-  return (
-    <>
-      <Dashboard />
-      {!started && <ScenarioPicker engine={engine} onPick={() => setStarted(true)} />}
-    </>
-  );
+  // Dashboard (and ControlBar's play/pause button, which reads engine.running once at mount)
+  // only mounts after a start mode is chosen, so its initial state is never stale.
+  if (!started) return <ScenarioPicker engine={engine} onPick={() => setStarted(true)} />;
+  return <Dashboard />;
 }

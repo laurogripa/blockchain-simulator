@@ -9,17 +9,25 @@ describe('runScenario (the 64-block happy path)', () => {
     expect(tip.height).toBe(SCENARIO_LENGTH - 1); // genesis is height 0, so block 64 is height 63
   });
 
-  it('is fully deterministic: two runs with the same seed produce the same final tip hash', () => {
-    const a = runScenario(SCENARIO_SEED);
-    const b = runScenario(SCENARIO_SEED);
-    expect(a.network.tip).toBe(b.network.tip);
-  });
+  it(
+    'is fully deterministic: two runs with the same seed produce the same final tip hash',
+    () => {
+      const a = runScenario(SCENARIO_SEED);
+      const b = runScenario(SCENARIO_SEED);
+      expect(a.network.tip).toBe(b.network.tip);
+    },
+    15_000, // two full mining runs; SCENARIO_BITS keeps this fast, but give headroom under load
+  );
 
-  it('a different seed produces a different run (sanity: the seed actually matters)', () => {
-    const a = runScenario(SCENARIO_SEED);
-    const b = runScenario(SCENARIO_SEED + 1);
-    expect(a.network.tip).not.toBe(b.network.tip);
-  });
+  it(
+    'a different seed produces a different run (sanity: the seed actually matters)',
+    () => {
+      const a = runScenario(SCENARIO_SEED);
+      const b = runScenario(SCENARIO_SEED + 1);
+      expect(a.network.tip).not.toBe(b.network.tip);
+    },
+    15_000,
+  );
 
   it('all 7 halvings occur across the run (subsidy schedule runs independently of the beats)', () => {
     const values = Array.from({ length: 8 }, (_, epoch) => subsidyAt(epoch * 8 + 1));

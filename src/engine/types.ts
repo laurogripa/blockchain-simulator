@@ -26,6 +26,7 @@ export interface Transaction {
   size: number; // synthetic vbytes
   isCoinbase: boolean;
   createdAt: SimTime;
+  message?: string; // coinbase scriptSig-style embedded text (genesis's headline, e.g.)
 }
 
 export interface BlockHeader {
@@ -63,6 +64,7 @@ export interface PeerNode {
   peers: NodeId[];
   known: Set<Hash>;
   tip: Hash;
+  clientVersion: string; // e.g. "Bitcoin Core 26.0" — cosmetic: every node runs identical consensus rules regardless
   firstSeen: Map<Hash, SimTime>;
   mempool: Map<Txid, Transaction>;
   utxo: Map<Outpoint, UtxoEntry>;

@@ -4,6 +4,7 @@ import { engine } from '../../engine/engine';
 import { computeBlockHash, meetsTarget } from '../../engine/chain';
 import { targetHexForBits } from '../../engine/constants';
 import { feeRate } from '../../engine/mempool';
+import { formatSats } from '../../engine/format';
 import type { BlockHeader } from '../../engine/types';
 
 const MINE_CHUNK = 4000; // hashes per tick, keeps the main thread responsive
@@ -166,7 +167,7 @@ export function BlockModal() {
 
         {children.length > 0 && (
           <div style={{ marginBottom: 12, fontSize: 11 }}>
-            <div className="panel-title">children (would break if you change this block)</div>
+            <div className="panel-title">children</div>
             {children.map((c) => {
               const linkOk = !isTampered;
               return (
@@ -259,9 +260,14 @@ export function BlockModal() {
                 <span style={{ color: 'var(--text-dim)' }}>
                   {tx.outputs.map((o, i) => (
                     <span key={i} style={{ marginRight: 10 }}>
-                      <span style={{ color: `var(--addr-${o.address})` }}>{o.address}</span> {o.value}
+                      <span style={{ color: `var(--addr-${o.address})` }}>{o.address}</span> {formatSats(o.value)}
                     </span>
                   ))}
+                  {tx.message && (
+                    <div style={{ color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 4 }}>
+                      "{tx.message}"
+                    </div>
+                  )}
                 </span>
                 <span style={{ color: 'var(--text-dim)', textAlign: 'right' }}>
                   {tx.isCoinbase ? '—' : feeRate(tx).toFixed(3)}

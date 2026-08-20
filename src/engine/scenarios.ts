@@ -18,8 +18,10 @@ export type ScenarioKind = 'accidentalFork' | 'partition' | 'heal' | 'doubleSpen
 
 // Mining at the real DIFFICULTY_BITS (2^20 expected hashes/block) is fine for the throttled,
 // worker-driven live sim but far too slow to brute-force synchronously 64 times over — this is
-// a separate, deliberately easy target just for generating the scripted run quickly.
-const SCENARIO_BITS = 12;
+// a separate, deliberately easy target just for generating the scripted run quickly. Kept low
+// (2^8 = 256 expected hashes/block) so the run stays fast and consistent rather than occasionally
+// hitting an unlucky long tail on some seed and blowing a test timeout.
+const SCENARIO_BITS = 8;
 
 const MINER_IDS = ['M1', 'M2', 'M3', 'M4', 'M5'] as const;
 type MinerId = (typeof MINER_IDS)[number];
@@ -302,11 +304,8 @@ export function runScenario(seed: number = SCENARIO_SEED): ScenarioState {
   const genesis = makeGenesisBlock();
   const blocks = new Map<Hash, Block>([[genesis.hash, genesis]]);
   const network = makePeerNode('network', 'full', 0, 0, genesis);
-  // applyBlock is called via receiveBlock's retarget path once a first real block connects, but
-  // genesis itself needs its outputs seeded manually since there's no "receiveBlock(genesis)".
-  for (const [i, out] of genesis.txs[0].outputs.entries()) {
-    network.utxo.set(`${genesis.txs[0].txid}:${i}`, { outpoint: `${genesis.txs[0].txid}:${i}`, ...out, height: 0 });
-  }
+  // Genesis's coinbase is deliberately never added to the UTXO set — see makeGenesisBlock's
+  // doc comment. Its 50 BTC output is permanently unspendable, same as the real chain.
 
   const state: ScenarioState = { blocks, network, rng: new Rng(seed), now: 0, orphans: [], log: [] };
 

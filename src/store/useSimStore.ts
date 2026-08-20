@@ -12,6 +12,8 @@ export interface NodeView {
   reorgFlashUntil: number;
   partitioned: boolean;
   partitionGroup: number;
+  clientVersion: string;
+  peers: NodeId[];
 }
 
 export interface MinerView extends NodeView {
@@ -54,6 +56,7 @@ interface SimStoreState {
   partitionActive: boolean;
   inspectedBlock: Hash | null; // drives BlockModal
   inspectedMiner: NodeId | null; // drives MinerModal
+  inspectedNode: NodeId | null; // drives NodeModal (full nodes)
   lastMinedBy: NodeId | null; // most recent block's miner — highlighted on the graph
 
   setFocusedNode: (id: NodeId) => void;
@@ -63,6 +66,8 @@ interface SimStoreState {
   closeBlockModal: () => void;
   openMinerModal: (id: NodeId) => void;
   closeMinerModal: () => void;
+  openNodeModal: (id: NodeId) => void;
+  closeNodeModal: () => void;
 }
 
 export const useSimStore = create<SimStoreState>((set) => ({
@@ -84,6 +89,7 @@ export const useSimStore = create<SimStoreState>((set) => ({
   partitionActive: false,
   inspectedBlock: null,
   inspectedMiner: null,
+  inspectedNode: null,
   lastMinedBy: null,
 
   setFocusedNode: (id) => set({ focusedNode: id, selectedBlock: null, selectedTx: null }),
@@ -93,6 +99,8 @@ export const useSimStore = create<SimStoreState>((set) => ({
   closeBlockModal: () => set({ inspectedBlock: null }),
   openMinerModal: (id) => set({ inspectedMiner: id }),
   closeMinerModal: () => set({ inspectedMiner: null }),
+  openNodeModal: (id) => set({ inspectedNode: id }),
+  closeNodeModal: () => set({ inspectedNode: null }),
 }));
 
 export type { SimStoreState };
