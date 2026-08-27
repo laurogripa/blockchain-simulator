@@ -3,7 +3,7 @@ import type { SimEngine } from '../../engine/engine';
 
 /**
  * Temporarily hidden: the scripted scenario currently seeds its history instantly rather than
- * replaying it. Flip this back on once the genesis→64 reconstruction lands (see GOALS.md).
+ * replaying it. Flip this back on once the genesis→64 reconstruction lands.
  * While off, the picker collapses to a single "start" button.
  */
 export const SHOW_SCRIPTED_SCENARIO = false;
@@ -26,7 +26,7 @@ export function ScenarioPicker({ engine, onPick }: ScenarioPickerProps) {
       engine.loadScenario();
       // Paused on purpose for now: the scenario seeds its full 63-block history instantly
       // rather than replaying it block-by-block. A proper genesis→64 reconstruction with
-      // rewind/fast-forward is next-steps work (see GOALS.md) — until then, land on a frozen
+      // rewind/fast-forward is future work — until then, land on a frozen
       // final frame instead of immediately racing off into live/random mining past block 64.
       engine.setRunning(false);
     }

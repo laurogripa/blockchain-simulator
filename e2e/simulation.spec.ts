@@ -28,7 +28,7 @@ test.skip('picking the 64-block scenario seeds the chain instantly, paused on th
     .poll(async () => chainPanel.locator('text=/^h\\d+$/').count(), { timeout: 5_000 })
     .toBeGreaterThan(20);
 
-  // Paused for now (see GOALS.md next-steps) — the play/pause control should read "paused".
+  // Paused for now — the play/pause control should read "paused".
   await expect(page.getByRole('button', { name: '▶' })).toBeVisible();
 });
 
