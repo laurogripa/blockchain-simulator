@@ -54,10 +54,26 @@ export function NodeModal() {
           <span>mempool {mempoolTxs.length}</span>
           <span>utxo {utxoEntries.length}</span>
           {nodeView.partitioned && <span style={{ color: 'var(--danger)' }}>partitioned (group {nodeView.partitionGroup})</span>}
+          <span style={{ color: node.rules.name === 'big' ? 'var(--danger)' : undefined }}>{node.rules.name} rules{node.rules.name === 'big' ? ` from h${node.rules.forkHeight}` : ''}</span>
         </div>
         <div className="mono" style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 10, fontStyle: 'italic' }}>
-          same consensus rules as every other node — the version string doesn't change what it accepts
+          {node.rules.name === 'big'
+            ? 'runs the hard-forked ruleset — legacy blocks from the fork height on are invalid here, whatever their work'
+            : 'the version string doesn\'t change what it accepts — only the ruleset does'}
         </div>
+        {node.rejected.size > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div className="panel-title">rejected blocks ({node.rejected.size})</div>
+            {Array.from(node.rejected.entries()).slice(-6).reverse().map(([hash, why]) => {
+              const b = engine.blocks.get(hash);
+              return (
+                <div key={hash} className="mono" style={{ fontSize: 10, color: 'var(--danger)' }}>
+                  h{b?.height ?? '?'} by {b?.minedBy ?? '?'} · {hash.slice(0, 8)}… — {why}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>

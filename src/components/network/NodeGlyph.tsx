@@ -70,13 +70,21 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
       <text y={r + 12} textAnchor="middle" fontSize={9} fill="var(--text-dim)">
         {node.id}
       </text>
+      {node.rules === 'big' && (
+        <g transform={`translate(${-r * 0.8},${-r * 0.9})`}>
+          <rect x={-10} y={-6} width={20} height={11} rx={2} fill="var(--danger)" />
+          <text textAnchor="middle" dominantBaseline="central" fontSize={7} fill="#fff" fontWeight={700} className="mono">
+            BIG
+          </text>
+        </g>
+      )}
     </g>
   );
 
   // Full nodes keep a hover tooltip with their tip hash (useful for spotting a fork); miners
   // don't — hovering a miner mid-fork was reading as "this hash means something about mining
   // progress", which it doesn't. Click either kind to open its inspector modal.
-  return isMiner ? shape : <Tooltip text={`${node.id} tip:${node.tip}`}>{shape}</Tooltip>;
+  return isMiner ? shape : <Tooltip text={`${node.id} (${node.rules} rules) tip:${node.tip}`}>{shape}</Tooltip>;
 }
 
 function hexPoints(r: number): string {

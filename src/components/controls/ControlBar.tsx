@@ -9,6 +9,9 @@ export function ControlBar() {
   const [mode, setMode] = useState(engine.mode);
   const partitionActive = useSimStore((s) => s.partitionActive);
   const focusedNode = useSimStore((s) => s.focusedNode);
+  const raceActive = useSimStore((s) => s.raceActive);
+  const hardForked = useSimStore((s) => s.hardForkHeight !== null);
+  const scenarioBusy = raceActive || hardForked;
 
   return (
     <div
@@ -43,7 +46,29 @@ export function ControlBar() {
 
       <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
 
-      <button onClick={() => engine.runAccidentalFork()}>fork</button>
+      <button
+        title="M1 and M2 solve the same height at the same instant; the very next block settles it"
+        className={raceActive ? 'active' : ''}
+        disabled={scenarioBusy}
+        onClick={() => engine.runAccidentalFork(1)}
+      >
+        fork
+      </button>
+      <button
+        title="same, but both branches get extended once more before anyone breaks the tie (the rare case)"
+        disabled={scenarioBusy}
+        onClick={() => engine.runAccidentalFork(2)}
+      >
+        fork ×2
+      </button>
+      <button
+        title="N9, N10, M4, M5 switch to incompatible big-block rules — a permanent chain split, Bitcoin / Bitcoin Cash style"
+        className={hardForked ? 'active' : ''}
+        disabled={scenarioBusy}
+        onClick={() => engine.hardFork()}
+      >
+        {hardForked ? 'hard forked' : 'hard fork'}
+      </button>
       <button
         className={partitionActive ? 'active' : ''}
         onClick={() => (partitionActive ? engine.heal() : engine.partition())}

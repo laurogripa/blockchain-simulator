@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Hash, LogEvent, NodeId, Packet, SimMode, Txid } from '../engine/types';
+import type { ForkRecord, Hash, LogEvent, NodeId, Packet, Ruleset, SimMode, Txid } from '../engine/types';
 
 export interface NodeView {
   id: NodeId;
@@ -14,6 +14,7 @@ export interface NodeView {
   partitionGroup: number;
   clientVersion: string;
   peers: NodeId[];
+  rules: Ruleset;
 }
 
 export interface MinerView extends NodeView {
@@ -34,7 +35,9 @@ export interface BlockView {
   merkleRoot: string;
   nonce: number;
   bits: number;
-  isOrphan: boolean;
+  ruleset: Ruleset;
+  chain: 'main' | 'alt' | null; // main = N1's chain; alt = the hard-forked side's own chain
+  isOrphan: boolean; // on neither live chain — a stale block nobody builds on
 }
 
 interface SimStoreState {
@@ -58,6 +61,9 @@ interface SimStoreState {
   inspectedMiner: NodeId | null; // drives MinerModal
   inspectedNode: NodeId | null; // drives NodeModal (full nodes)
   lastMinedBy: NodeId | null; // most recent block's miner — highlighted on the graph
+  forks: ForkRecord[];
+  raceActive: boolean; // a scripted accidental-fork race is in progress
+  hardForkHeight: number | null;
 
   setFocusedNode: (id: NodeId) => void;
   setSelectedBlock: (h: Hash | null) => void;
@@ -91,6 +97,9 @@ export const useSimStore = create<SimStoreState>((set) => ({
   inspectedMiner: null,
   inspectedNode: null,
   lastMinedBy: null,
+  forks: [],
+  raceActive: false,
+  hardForkHeight: null,
 
   setFocusedNode: (id) => set({ focusedNode: id, selectedBlock: null, selectedTx: null }),
   setSelectedBlock: (h) => set({ selectedBlock: h, selectedTx: null }),

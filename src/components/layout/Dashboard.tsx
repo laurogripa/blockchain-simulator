@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ControlBar } from '../controls/ControlBar';
 import { NetworkGraph } from '../network/NetworkGraph';
-import { MempoolPanel } from '../mempool/MempoolPanel';
+import { SidePanels } from './SidePanels';
 import { ChainDag } from '../chain/ChainDag';
 import { BlockModal } from '../chain/BlockModal';
 import { MinerModal } from '../network/MinerModal';
@@ -27,7 +27,7 @@ export function Dashboard() {
           "chain chain"
         `,
         gridTemplateRows: 'auto minmax(300px, 1fr) minmax(180px, 260px)',
-        gridTemplateColumns: '1fr 340px',
+        gridTemplateColumns: '1fr 400px',
       }}
     >
       <ControlBar />
@@ -47,7 +47,7 @@ export function Dashboard() {
       </div>
 
       <div style={{ gridArea: 'side', minHeight: 0 }}>
-        <MempoolPanel />
+        <SidePanels />
       </div>
 
       <div className="panel" style={{ gridArea: 'chain', display: 'flex', flexDirection: 'column', minHeight: 0 }}>

@@ -25,6 +25,10 @@ export const EXPECTED_HASHES = 2 ** DIFFICULTY_BITS;
 export const TARGET_BLOCK_TIME_SIM_MS = 600_000; // 600s, like Bitcoin's 10 min scaled down 1:1 at speed 1
 
 export const MAX_TXS_PER_BLOCK = 8; // including coinbase
+// The hard-forked 'big' ruleset doubles the block capacity and stamps this version bit on every
+// block — legacy nodes treat that bit as invalid, which is what makes the split permanent.
+export const MAX_TXS_PER_BLOCK_BIG = 16;
+export const BIG_BLOCK_BIT = 1 << 5;
 export const COINBASE_VALUE = 5_000_000_000; // sats, arbitrary
 
 export const PROPAGATION_STRETCH = 20; // deviation from real timing, keeps packets watchable at 100x

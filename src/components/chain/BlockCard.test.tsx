@@ -45,7 +45,7 @@ describe('BlockCard', () => {
 
   it("shows the void seal ('VOID') for an orphaned/tampered block", () => {
     renderInSvg(makeNode({ isOrphan: true }));
-    expect(screen.getByText('VOID')).toBeInTheDocument();
+    expect(screen.getByText('STALE')).toBeInTheDocument();
   });
 
   it('opens the block modal (selects the block) when clicked', () => {

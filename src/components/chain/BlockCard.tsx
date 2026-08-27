@@ -22,6 +22,7 @@ export function BlockCard({ node }: BlockCardProps) {
   const isSelected = selected === node.hash;
   const color = MINER_COLOR[node.minedBy] ?? '#868e96';
   const sealColor = node.isOrphan ? 'var(--danger)' : 'var(--good)';
+  const isBig = node.ruleset === 'big';
 
   return (
     <Tooltip text={node.hash}>
@@ -49,6 +50,11 @@ export function BlockCard({ node }: BlockCardProps) {
         <text x={CARD_W - 8} y={22} fontSize={9} fill="var(--text-dim)" textAnchor="end">
           {node.txCount}tx
         </text>
+        {isBig && (
+          <text x={50} y={37} fontSize={7} fill="var(--danger)" className="mono" fontWeight={600}>
+            BIG
+          </text>
+        )}
 
         {/* the seal: proof-of-work as an ink stamp of authenticity, void if orphaned */}
         <g transform={`translate(${CARD_W - 10},34) rotate(-10)`}>
@@ -56,12 +62,12 @@ export function BlockCard({ node }: BlockCardProps) {
           <text
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={5.5}
+            fontSize={node.isOrphan ? 4.5 : 5.5}
             fill={sealColor}
             className="mono"
             fontWeight={600}
           >
-            {node.isOrphan ? 'VOID' : 'OK'}
+            {node.isOrphan ? 'STALE' : 'OK'}
           </text>
         </g>
       </g>

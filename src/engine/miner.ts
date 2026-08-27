@@ -1,5 +1,5 @@
 import type { Block, BlockHeader, Miner, Transaction } from './types';
-import { COINBASE_VALUE, MAX_TXS_PER_BLOCK, DIFFICULTY_BITS } from './constants';
+import { COINBASE_VALUE, MAX_TXS_PER_BLOCK, MAX_TXS_PER_BLOCK_BIG, BIG_BLOCK_BIT, DIFFICULTY_BITS } from './constants';
 import { selectMempoolTxs } from './mempool';
 import { buildMerkleLevels } from './crypto/merkle';
 import { sha256Hex } from './crypto/sha256';
@@ -18,7 +18,10 @@ export function buildCandidateTemplate(
   parent: Block,
   now: number,
 ): { header: BlockHeader; txs: Transaction[] } {
-  const selected = selectMempoolTxs(miner.mempool, MAX_TXS_PER_BLOCK - 1, miner.utxo);
+  // A miner builds blocks under its own ruleset: the hard-forked 'big' rules allow twice the
+  // txs and stamp the fork bit into the version so every node can tell which rules it follows.
+  const big = miner.rules?.name === 'big';
+  const selected = selectMempoolTxs(miner.mempool, (big ? MAX_TXS_PER_BLOCK_BIG : MAX_TXS_PER_BLOCK) - 1, miner.utxo);
   const height = parent.height + 1;
   const subsidy = subsidyAt(height);
   const coinbaseBase = {
@@ -36,7 +39,7 @@ export function buildCandidateTemplate(
   const txs = [coinbase, ...selected];
   const { root } = buildMerkleLevels(txs.map((t) => t.txid));
   const header: BlockHeader = {
-    version: 1,
+    version: big ? 1 | BIG_BLOCK_BIT : 1,
     prevHash: parent.hash,
     merkleRoot: root,
     timestamp: now,

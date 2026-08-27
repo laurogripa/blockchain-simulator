@@ -4,6 +4,7 @@ import { layoutDag, CARD_W, CARD_GAP, LANE_H } from '../../layout/dagLayout';
 import { ForkEdges } from './ForkEdges';
 import { BlockCard } from './BlockCard';
 import { TipMarkers } from './TipMarkers';
+import { ForkLabels } from './ForkLabels';
 
 const laneMemo = new Map<string, number>();
 const STEP_BLOCKS = 5; // how many blocks < > nudge by
@@ -20,6 +21,7 @@ export function ChainDag() {
   const maxLane = nodes.reduce((m, n) => Math.max(m, n.lane), 0);
   const width = (maxHeight + 1) * (CARD_W + CARD_GAP) + 40;
   const height = (maxLane + 1) * LANE_H + 40;
+  const topPad = 18; // room for fork labels above lane 0
   const step = STEP_BLOCKS * (CARD_W + CARD_GAP);
 
   // auto-follow the tip
@@ -52,8 +54,9 @@ export function ChainDag() {
         </div>
       </div>
       <div ref={containerRef} style={{ overflowX: 'auto', width: '100%', flex: 1, minHeight: 0 }}>
-        <svg width={width} height={Math.max(height, 140)} viewBox={`0 0 ${width} ${Math.max(height, 140)}`}>
+        <svg width={width} height={Math.max(height, 140) + topPad} viewBox={`0 ${-topPad} ${width} ${Math.max(height, 140) + topPad}`}>
           <ForkEdges nodes={nodes} byHash={byHash} />
+          <ForkLabels byHash={byHash} />
           {nodes.map((n) => (
             <g key={n.hash}>
               <BlockCard node={n} />

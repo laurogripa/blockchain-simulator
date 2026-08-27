@@ -1,5 +1,6 @@
 import type {
   Block,
+  ForkRecord,
   Hash,
   LogEvent,
   Miner,
@@ -14,7 +15,8 @@ import type { BlockView, MinerView, NodeView } from '../store/useSimStore';
 import { Rng } from './rng';
 import { EventQueue } from './eventQueue';
 import { buildTopology, edgeLatency, type Edge } from './network';
-import { makePeerNode, receiveBlock, receiveTx } from './node';
+import { blockRuleset, makePeerNode, receiveBlock, receiveTx } from './node';
+import { analyzeForks, decidingBlock } from './forks';
 import { makeGenesisBlock, GENESIS_HASH } from './chain';
 import { buildCandidateTemplate, finalizeBlock } from './miner';
 import { makeRandomTx } from './mempool';
@@ -27,7 +29,7 @@ import {
   MAX_DT_REAL_MS,
   LOG_RING_SIZE,
 } from './constants';
-import { targetHexForBits } from './constants';
+import { targetHexForBits, workOfBits } from './constants';
 
 const FULL_NODE_IDS = Array.from({ length: 10 }, (_, i) => `N${i + 1}`);
 const MINER_IDS = ['M1', 'M2', 'M3', 'M4', 'M5'];
@@ -41,6 +43,26 @@ interface PendingSolution {
   minerId: NodeId;
   block: Block;
 }
+
+/**
+ * A scripted "simultaneous solve": two miners' solutions are held back until both exist, then
+ * announced in the same instant. `roundsLeft` > 1 repeats it on top of the two fresh branches,
+ * producing the (rare in real life) fork that stays tied for several blocks.
+ */
+interface ForkRace {
+  miners: [NodeId, NodeId];
+  roundsLeft: number;
+  round: number;
+  phase: 'arming' | 'racing' | 'settling'; // arming = waiting for both racers to share a tip
+  released: Hash[]; // blocks announced in the last round — round N+1 waits until every node has them
+  pausedMiners: NodeId[];
+}
+
+/** Who goes to the hard-forked ruleset: a contiguous stretch of the peer ring so the minority
+ *  side stays connected through its own relays (legacy nodes won't relay big-block blocks). */
+const BIG_RULES_NODES: NodeId[] = ['N9', 'N10', 'M4', 'M5'];
+
+const formatWork = (w: number) => `${(w / workOfBits(20)).toFixed(0)} blocks of work`;
 
 export class SimEngine {
   blocks = new Map<Hash, Block>();
@@ -69,7 +91,12 @@ export class SimEngine {
   // scenario state
   gatedAnnouncements: PendingSolution[] | null = null; // when set, solutions accumulate here
   gateMiners = new Set<NodeId>();
+  race: ForkRace | null = null;
+  hardForkHeight: number | null = null;
   lastMinedBy: NodeId | null = null;
+  forkRecords = new Map<Hash, ForkRecord>(); // keyed by the fork point's parent hash
+  private boosted = new Set<NodeId>(); // miners whose throttle mineNow() lifted, until they solve
+  private rejectionLogged = new Set<string>(); // `${ruleset}:${hash}` — one log line per side per block
   genesisHash: Hash = GENESIS_HASH; // overwritten in setup() with the real, mined genesis hash
 
   constructor() {
@@ -165,9 +192,15 @@ export class SimEngine {
       this.maybeGenerateTx();
       for (const id of MINER_IDS) {
         const m = this.nodes.get(id) as Miner;
-        if (m.status === 'idle') this.ensureMinerTemplate(id);
+        if (m.status !== 'idle') continue;
+        // a racing miner must not run ahead of the scripted race: not while its solution is
+        // held for its rival, and not while the network is still absorbing the last round
+        if (this.gateMiners.has(id) && this.gatedAnnouncements?.some((p) => p.minerId === id)) continue;
+        if (this.race && this.race.phase !== 'racing' && this.race.miners.includes(id)) continue;
+        this.ensureMinerTemplate(id);
       }
     }
+    if (this.race && this.race.phase !== 'racing' && this.running) this.advanceRace();
     this.updateHashrateBudgets();
     this.flushDirtyToStore(now);
   }
@@ -273,15 +306,53 @@ export class SimEngine {
     const node = this.nodes.get(nodeId);
     if (!node) return;
     const before = node.known.has(block.hash);
-    const { isNewBest, reorg } = receiveBlock(this.blocks, node, block, this.simNow);
+    const prevTip = node.tip;
+    const { isNewBest, reorg, rejected, tieKept } = receiveBlock(this.blocks, node, block, this.simNow);
+    if (rejected) {
+      // Refused blocks are neither adopted nor relayed — this is how a rule split stays split.
+      const key = `${node.rules.name}:${block.hash}`;
+      if (!this.rejectionLogged.has(key)) {
+        this.rejectionLogged.add(key);
+        this.logEvent('reject', `${nodeId} (${node.rules.name} rules) rejects h${block.height} by ${block.minedBy}: ${rejected} — ignored no matter its work`);
+      }
+      this.dirty = true;
+      return;
+    }
     if (!before) {
       node.advertisedTip.set(fromId, block.hash);
       this.floodBlock(nodeId, block, fromId);
     }
-    if (reorg) {
-      this.logEvent('reorg', `${nodeId} reorg depth ${reorg.depth}`);
+    if (tieKept) {
+      const kept = this.blocks.get(node.tip)!;
+      const seenGap = this.simNow - (node.firstSeen.get(kept.hash) ?? this.simNow);
+      const when = seenGap < 50 ? 'arrived in the same instant' : `arrived ${(seenGap / 1000).toFixed(1)}s later`;
+      this.logEvent('tie', `${nodeId} keeps h${kept.height} by ${kept.minedBy}: ${block.minedBy}'s h${block.height} ${when} with equal work — first seen wins`);
     }
-    if (isNewBest) this.dirty = true;
+    if (reorg) {
+      const oldTip = this.blocks.get(prevTip)!;
+      const droppedBy = reorg.disconnected.map((h) => this.blocks.get(h)?.minedBy ?? '?').join(',');
+      this.logEvent('reorg', `${nodeId} reorg: switches to ${block.minedBy}'s h${block.height} (${formatWork(block.cumulativeWork)}) over h${oldTip.height} (${formatWork(oldTip.cumulativeWork)}) — drops ${reorg.depth} block${reorg.depth > 1 ? 's' : ''} by ${droppedBy}`);
+    }
+    if (isNewBest) {
+      this.dirty = true;
+      if (node.kind === 'miner') this.restartMinerIfStale(nodeId);
+    }
+  }
+
+  /** A miner whose tip moved must abandon a template built on the old tip — real miners switch
+   *  the instant a better chain shows up, otherwise their next block would be born stale. */
+  private restartMinerIfStale(minerId: NodeId) {
+    const miner = this.nodes.get(minerId) as Miner;
+    if (miner.status !== 'grinding' || !miner.template) return;
+    if (miner.template.header.prevHash === miner.tip) return;
+    const attempt = miner.attempts[miner.attempts.length - 1];
+    if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow; // superseded
+    this.workers.get(minerId)!.postMessage({ type: 'stop' });
+    this.boosted.delete(minerId);
+    miner.template = null;
+    miner.hashesDone = 0;
+    miner.status = 'idle';
+    if (this.mode === 'auto' && this.running) this.ensureMinerTemplate(minerId);
   }
 
   // ---- mining ----
@@ -290,7 +361,7 @@ export class SimEngine {
     const networkHps = denomSeconds > 0 ? EXPECTED_HASHES / denomSeconds : 0;
     for (const id of MINER_IDS) {
       const m = this.nodes.get(id) as Miner;
-      if (m.status !== 'grinding') continue;
+      if (m.status !== 'grinding' || this.boosted.has(id)) continue;
       const hps = Math.max(50, networkHps * m.hashPower);
       this.workers.get(id)!.postMessage({ type: 'setHps', hps });
     }
@@ -331,7 +402,8 @@ export class SimEngine {
     const miner = this.nodes.get(minerId) as Miner;
     if (!miner) return;
     if (!miner.template) this.ensureMinerTemplate(minerId);
-    // lift throttle: ~1M h/s
+    // lift throttle: ~1M h/s, held until this template is solved or abandoned
+    this.boosted.add(minerId);
     this.workers.get(minerId)!.postMessage({ type: 'setHps', hps: 1_000_000 });
   }
 
@@ -356,6 +428,7 @@ export class SimEngine {
       miner.status = 'idle';
       miner.template = null;
       miner.hashesDone = 0;
+      this.boosted.delete(minerId);
       this.onBlockSolved(minerId, block);
     }
   }
@@ -363,7 +436,7 @@ export class SimEngine {
   private onBlockSolved(minerId: NodeId, block: Block) {
     if (this.gateMiners.has(minerId) && this.gatedAnnouncements) {
       this.gatedAnnouncements.push({ minerId, block });
-      this.logEvent('fork', `${minerId} solved block (held) height ${block.height}`);
+      this.logEvent('fork', `${minerId} found a valid h${block.height} (hash ${block.hash.slice(0, 8)}…, nonce ${block.header.nonce}) — held until its rival solves too`);
       if (this.gatedAnnouncements.length >= this.gateMiners.size) {
         this.releaseGatedAnnouncements();
       }
@@ -378,7 +451,8 @@ export class SimEngine {
     const { reorg } = receiveBlock(this.blocks, miner, block, this.simNow);
     if (!before) this.floodBlock(minerId, block);
     this.lastMinedBy = minerId;
-    this.logEvent('block', `${minerId} mined height ${block.height} (${block.txs.length} txs)`);
+    const rules = blockRuleset(block) === 'big' ? ', big rules' : '';
+    this.logEvent('block', `${minerId} mined h${block.height} on ${this.blocks.get(block.header.prevHash)?.minedBy ?? 'genesis'}'s h${block.height - 1} (${block.txs.length} txs, nonce ${block.header.nonce}${rules})`);
     if (reorg) this.logEvent('reorg', `${minerId} reorg depth ${reorg.depth}`);
     this.dirty = true;
   }
@@ -387,32 +461,151 @@ export class SimEngine {
     const pending = this.gatedAnnouncements!;
     this.gatedAnnouncements = null;
     this.gateMiners.clear();
+    const [a, b] = pending;
+    if (a && b) {
+      const sameParent = a.block.header.prevHash === b.block.header.prevHash;
+      this.logEvent('fork', `both announce h${a.block.height} at the same instant: ${a.minerId} ${a.block.hash.slice(0, 8)}… vs ${b.minerId} ${b.block.hash.slice(0, 8)}… — ${sameParent ? 'same parent, ' : 'each on its own branch, '}same work, different nonces; every node keeps whichever reaches it first`);
+    }
     for (const { minerId, block } of pending) {
       this.announceBlock(minerId, block);
+    }
+    if (this.race) {
+      this.race.released = pending.map((p) => p.block.hash);
+      this.race.roundsLeft--;
+      this.race.phase = 'settling';
     }
   }
 
   // ---- scenarios ----
-  runAccidentalFork() {
-    this.gateMiners = new Set(['M1', 'M2']);
+  /**
+   * Accidental fork: M1 and M2 solve the same height at the same instant. `depth` = how many
+   * consecutive rounds of simultaneous solves to force. 1 is the realistic case (the very next
+   * block settles it); 2+ reproduces the rare fork that stays tied for several blocks. The other
+   * miners are paused during the race so it stays deterministic, then resumed to settle it.
+   */
+  runAccidentalFork(depth = 1) {
+    if (this.race || this.hardForkHeight !== null) return;
+    const miners: [NodeId, NodeId] = ['M1', 'M2'];
+    const paused = MINER_IDS.filter((id) => !miners.includes(id));
+    for (const id of paused) this.pauseMiner(id);
+    this.race = { miners, roundsLeft: depth, round: 0, phase: 'arming', released: [], pausedMiners: paused };
+    const tip = this.blocks.get(this.nodes.get('M1')!.tip)!;
+    this.logEvent('fork', `accidental fork staged at h${tip.height + 1}: M1 and M2 race on the same parent (${paused.join(',')} paused for the demo)${depth > 1 ? `, tied for ${depth} rounds` : ''}`);
+    this.advanceRace();
+  }
+
+  private startRaceRound() {
+    const race = this.race!;
+    race.round++;
+    race.phase = 'racing';
+    this.gateMiners = new Set(race.miners);
     this.gatedAnnouncements = [];
-    for (const id of ['M1', 'M2']) {
+    for (const id of race.miners) {
       const m = this.nodes.get(id) as Miner;
+      if (m.status === 'grinding' && m.template?.header.prevHash !== m.tip) this.restartMinerIfStale(id);
       if (m.status !== 'grinding') this.ensureMinerTemplate(id);
       this.mineNow(id);
     }
-    this.logEvent('fork', 'accidental fork triggered: M1 & M2 racing');
+  }
+
+  private advanceRace() {
+    const race = this.race!;
+    if (race.phase === 'arming') {
+      // both racers must build on the very same parent, else it isn't a fork at all
+      const [a, b] = race.miners.map((id) => this.nodes.get(id)!.tip);
+      if (a !== b) return;
+      this.startRaceRound();
+      return;
+    }
+    // wait until every node has seen both rival blocks — so the split is visible before it deepens
+    const everyoneHasBoth = Array.from(this.nodes.values()).every((n) => race.released.every((h) => n.known.has(h)));
+    if (!everyoneHasBoth) return;
+    if (race.roundsLeft > 0) {
+      const [a, b] = race.miners.map((id) => this.blocks.get(this.nodes.get(id)!.tip)!);
+      if (a.hash === b.hash) {
+        // they converged on one tip — nothing left to deepen
+        this.logEvent('fork', `race cut short: M1 and M2 already agree on h${a.height}`);
+        race.roundsLeft = 0;
+      } else {
+        this.logEvent('fork', `round ${race.round + 1}: the network is split — each miner extends its own h${a.height}; both branches still tie`);
+        this.startRaceRound();
+        return;
+      }
+    }
+    this.logEvent('fork', `race over: ${race.pausedMiners.join(',')} resume — the next block mined on either branch breaks the tie`);
+    for (const id of race.pausedMiners) this.resumeMiner(id);
+    this.race = null;
+  }
+
+  private pauseMiner(id: NodeId) {
+    const m = this.nodes.get(id) as Miner;
+    if (m.status === 'grinding') this.workers.get(id)!.postMessage({ type: 'stop' });
+    const attempt = m.attempts[m.attempts.length - 1];
+    if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow;
+    this.boosted.delete(id);
+    m.template = null;
+    m.hashesDone = 0;
+    m.status = 'paused';
+    this.dirty = true;
+  }
+
+  private resumeMiner(id: NodeId) {
+    const m = this.nodes.get(id) as Miner;
+    if (m.status === 'paused') m.status = 'idle';
+    this.dirty = true;
+  }
+
+  /**
+   * Bitcoin/Bitcoin-Cash-style chain split: a minority of nodes and miners switch to a new,
+   * incompatible ruleset from the next height on. No network partition is involved — the two
+   * sides stay connected and keep relaying, they simply refuse each other's blocks. Cumulative
+   * work cannot settle this: each side's "heaviest valid chain" is its own, forever.
+   */
+  hardFork() {
+    if (this.hardForkHeight !== null || this.race) return;
+    const tip = this.blocks.get(this.nodes.get('N1')!.tip)!;
+    const forkHeight = tip.height + 1;
+    this.hardForkHeight = forkHeight;
+    for (const id of BIG_RULES_NODES) {
+      const n = this.nodes.get(id)!;
+      n.rules = { name: 'big', forkHeight };
+    }
+    // keep the minority side connected to itself so its blocks can reach every big-rules node
+    for (let i = 0; i + 1 < BIG_RULES_NODES.length; i++) this.ensurePeered(BIG_RULES_NODES[i], BIG_RULES_NODES[i + 1]);
+    // miners on the new rules throw away any legacy template they were grinding
+    for (const id of MINER_IDS) {
+      const m = this.nodes.get(id) as Miner;
+      if (m.rules.name !== 'big' || m.status !== 'grinding') continue;
+      this.workers.get(id)!.postMessage({ type: 'stop' });
+      const attempt = m.attempts[m.attempts.length - 1];
+      if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow;
+      m.template = null;
+      m.status = 'idle';
+    }
+    const bigMiners = MINER_IDS.filter((id) => (this.nodes.get(id) as Miner).rules.name === 'big');
+    const bigPower = bigMiners.reduce((s, id) => s + (this.nodes.get(id) as Miner).hashPower, 0);
+    this.logEvent('split', `hard fork at h${forkHeight}: ${BIG_RULES_NODES.join(',')} switch to big-block rules (${(bigPower * 100).toFixed(0)}% of hashpower) — legacy nodes reject the fork bit, big nodes reject legacy blocks from h${forkHeight} on`);
+    this.dirty = true;
+  }
+
+  private ensurePeered(a: NodeId, b: NodeId) {
+    const na = this.nodes.get(a)!;
+    const nb = this.nodes.get(b)!;
+    if (na.peers.includes(b)) return;
+    na.peers.push(b);
+    nb.peers.push(a);
+    this.edges.push({ a, b, baseLatencyMs: this.rng.range(40, 250) });
   }
 
   partition() {
-    const half = Math.ceil(this.nodes.size / 2);
+    // alternate so both halves get miners — a half with no hashpower can't fork at all
     let i = 0;
     for (const node of this.nodes.values()) {
       node.partitioned = true;
-      node.partitionGroup = i < half ? 1 : 2;
+      node.partitionGroup = (i % 2) + 1;
       i++;
     }
-    this.logEvent('partition', 'network partitioned into two groups');
+    this.logEvent('partition', 'network partitioned into two groups — each half keeps mining its own chain');
     this.dirty = true;
   }
 
@@ -421,7 +614,7 @@ export class SimEngine {
       node.partitioned = false;
       node.partitionGroup = 0;
     }
-    this.logEvent('heal', 'partition healed — flooding tips');
+    this.logEvent('heal', 'partition healed — each side announces its tip; the chain with more work wins, the other side reorgs');
     // flood each node's known tip to all peers to trigger reconciliation
     for (const node of this.nodes.values()) {
       const tipBlock = this.blocks.get(node.tip);
@@ -471,12 +664,80 @@ export class SimEngine {
     if (this.events.length > LOG_RING_SIZE) this.events.shift();
   }
 
+  // ---- fork bookkeeping ----
+  /** Keeps ForkRecords in step with the block DAG and every node's tip; writes the "why". */
+  updateForkRecords() {
+    const tips = new Map<NodeId, Hash>();
+    for (const n of this.nodes.values()) tips.set(n.id, n.tip);
+    for (const point of analyzeForks(this.blocks, tips)) {
+      let rec = this.forkRecords.get(point.parentHash);
+      const isHard = point.branches.some((b) => b.ruleset === 'big') && point.branches.some((b) => b.ruleset === 'legacy');
+      if (!rec) {
+        rec = {
+          id: nextId('fork'),
+          parentHash: point.parentHash,
+          height: point.height,
+          kind: isHard ? 'hardfork' : 'accidental',
+          status: 'open',
+          openedAt: this.simNow,
+          resolvedAt: null,
+          branches: point.branches,
+          winner: null,
+          narrative: [],
+        };
+        const names = point.branches.map((b) => `${b.minedBy} (${b.root.slice(0, 8)}…${b.ruleset === 'big' ? ', big rules' : ''})`).join(' vs ');
+        rec.narrative.push(
+          isHard
+            ? `h${point.height}: ${names} — same parent, incompatible rules. Neither side will ever accept the other's blocks, so work can't decide this.`
+            : `h${point.height}: ${names} — same parent, equal work. Nodes keep whichever block reached them first and wait for more work.`,
+        );
+        this.forkRecords.set(point.parentHash, rec);
+      }
+      const prev = rec.branches;
+      rec.branches = point.branches;
+      if (rec.status === 'resolved' || rec.kind === 'hardfork') continue;
+      const alive = point.branches.filter((b) => b.supporters.length > 0);
+      const total = point.branches.reduce((s, b) => s + b.supporters.length, 0);
+      if (alive.length === 1 && total === this.nodes.size) {
+        const winner = alive[0];
+        const loser = point.branches.filter((b) => b.root !== winner.root).sort((a, b) => b.maxWork - a.maxWork)[0];
+        const decider = decidingBlock(this.blocks, winner.root, loser);
+        const lostSupport = prev.find((b) => b.root === loser.root)?.supporters.length ?? 0;
+        rec.status = 'resolved';
+        rec.resolvedAt = this.simNow;
+        rec.winner = winner.root;
+        rec.narrative.push(
+          decider
+            ? `resolved: ${decider.minedBy} mined h${decider.height} on ${winner.minedBy}'s branch, making it ${winner.length} blocks vs ${loser.length} — more work, so the ${lostSupport} node${lostSupport === 1 ? '' : 's'} on ${loser.minedBy}'s branch reorged onto it. ${loser.minedBy}'s h${point.height} is now stale.`
+            : `resolved: every node converged on ${winner.minedBy}'s branch (${winner.length} blocks vs ${loser.length}).`,
+        );
+        this.logEvent('resolve', `fork at h${point.height} resolved — ${winner.minedBy}'s branch wins with ${formatWork(winner.maxWork)} vs ${formatWork(loser.maxWork)}`);
+      }
+    }
+  }
+
+  private chainFromTip(tip: Hash): Hash[] {
+    const chain: Hash[] = [];
+    let cur: Hash | undefined = tip;
+    while (cur) {
+      const b = this.blocks.get(cur);
+      if (!b) break;
+      chain.unshift(cur);
+      // Genesis's own hash is a real, mined value (not the GENESIS_HASH sentinel) — the walk
+      // stops once it reaches a block with no real parent, i.e. whose prevHash IS that sentinel.
+      if (b.header.prevHash === GENESIS_HASH) break;
+      cur = b.header.prevHash;
+    }
+    return chain;
+  }
+
   // ---- store sync ----
   private flushDirtyToStore(nowReal: number) {
     const shouldFlushClock = nowReal - this.lastStoreFlush > 1000;
     if (!this.dirty && !shouldFlushClock) return;
     this.dirty = false;
     if (shouldFlushClock) this.lastStoreFlush = nowReal;
+    this.updateForkRecords();
 
     const nodes: Record<string, NodeView> = {};
     const miners: Record<string, MinerView> = {};
@@ -494,6 +755,7 @@ export class SimEngine {
         partitionGroup: n.partitionGroup,
         clientVersion: n.clientVersion,
         peers: n.peers,
+        rules: n.rules.name,
       };
       nodes[id] = view;
       if (n.kind === 'miner') {
@@ -510,18 +772,12 @@ export class SimEngine {
 
     const blockIndex: Record<string, BlockView> = {};
     const activeTip = this.nodes.get(FULL_NODE_IDS[0])?.tip ?? this.genesisHash;
-    const activeChain: Hash[] = [];
-    let cur: Hash | undefined = activeTip;
-    while (cur) {
-      const b = this.blocks.get(cur);
-      if (!b) break;
-      activeChain.unshift(cur);
-      // Genesis's own hash is a real, mined value (not the GENESIS_HASH sentinel) — the walk
-      // stops once it reaches a block with no real parent, i.e. whose prevHash IS that sentinel.
-      if (b.header.prevHash === GENESIS_HASH) break;
-      cur = b.header.prevHash;
-    }
+    const activeChain = this.chainFromTip(activeTip);
     const activeSet = new Set(activeChain);
+    // The hard-forked side's own best chain, as seen by its first full node — its blocks are
+    // valid under *their* rules, so they're drawn as a live second chain, not as stale orphans.
+    const bigNode = Array.from(this.nodes.values()).find((n) => n.rules.name === 'big' && n.kind === 'full');
+    const altSet = new Set(bigNode ? this.chainFromTip(bigNode.tip) : []);
     for (const [hash, b] of this.blocks) {
       blockIndex[hash] = {
         hash,
@@ -534,7 +790,9 @@ export class SimEngine {
         merkleRoot: b.header.merkleRoot,
         nonce: b.header.nonce,
         bits: b.header.bits,
-        isOrphan: !activeSet.has(hash),
+        ruleset: blockRuleset(b),
+        chain: activeSet.has(hash) ? 'main' : altSet.has(hash) && !activeSet.has(hash) ? 'alt' : null,
+        isOrphan: !activeSet.has(hash) && !altSet.has(hash),
       };
     }
 
@@ -554,6 +812,9 @@ export class SimEngine {
       networkEdges: this.edges.map((e) => ({ a: e.a, b: e.b })),
       partitionActive: Array.from(this.nodes.values()).some((n) => n.partitioned),
       lastMinedBy: this.lastMinedBy,
+      forks: Array.from(this.forkRecords.values()).map((f) => ({ ...f, branches: f.branches.map((b) => ({ ...b, supporters: b.supporters.slice() })), narrative: f.narrative.slice() })),
+      raceActive: this.race !== null,
+      hardForkHeight: this.hardForkHeight,
     });
   }
 }

@@ -8,6 +8,17 @@ export type NodeId = string;
 export type MinerId = NodeId;
 export type SimTime = number; // ms, sim clock
 
+/** Consensus ruleset a node enforces. 'legacy' is the original rules; 'big' is a hard-forked
+ *  ruleset (bigger blocks + a mandatory version bit) that legacy nodes consider invalid, and
+ *  which in turn rejects legacy blocks from its fork height on — a Bitcoin/Bitcoin-Cash-style
+ *  permanent chain split. */
+export type Ruleset = 'legacy' | 'big';
+
+export interface NodeRules {
+  name: Ruleset;
+  forkHeight: number; // for 'big': first height at which the big-block bit is mandatory
+}
+
 export interface TxOutput {
   address: Address;
   value: number; // sats
@@ -72,6 +83,8 @@ export interface PeerNode {
   reorgFlashUntil: SimTime;
   partitioned: boolean;
   partitionGroup: number; // 0 = none
+  rules: NodeRules;
+  rejected: Map<Hash, string>; // blocks this node refused, and why (consensus-rule violations)
 }
 
 export interface MinerAttempt {
@@ -115,8 +128,32 @@ export interface ReorgEvent {
 export interface LogEvent {
   id: string;
   at: SimTime;
-  kind: 'block' | 'tx' | 'reorg' | 'fork' | 'heal' | 'partition';
+  kind: 'block' | 'tx' | 'reorg' | 'fork' | 'heal' | 'partition' | 'tie' | 'reject' | 'split' | 'resolve';
   text: string;
+}
+
+/** One competing branch at a fork point, with the live stats the fork panel explains. */
+export interface BranchStat {
+  root: Hash; // the first block of this branch (a child of the fork's parent)
+  minedBy: MinerId;
+  ruleset: Ruleset;
+  tipHeight: number; // highest block on this branch
+  length: number; // blocks on the branch, counting the root
+  maxWork: number;
+  supporters: NodeId[]; // nodes whose current tip sits on this branch
+}
+
+export interface ForkRecord {
+  id: string;
+  parentHash: Hash;
+  height: number; // height of the competing blocks
+  kind: 'accidental' | 'hardfork';
+  status: 'open' | 'resolved';
+  openedAt: SimTime;
+  resolvedAt: SimTime | null;
+  branches: BranchStat[];
+  winner: Hash | null; // branch root that the whole network converged on
+  narrative: string[]; // human-readable "why", appended as the fork evolves
 }
 
 export type SimMode = 'manual' | 'auto';

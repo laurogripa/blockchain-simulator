@@ -43,6 +43,8 @@ function makeNode(tip: string): PeerNode {
     reorgFlashUntil: 0,
     partitioned: false,
     partitionGroup: 0,
+    rules: { name: 'legacy', forkHeight: Infinity },
+    rejected: new Map(),
   };
 }
 
