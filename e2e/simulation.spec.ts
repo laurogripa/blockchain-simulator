@@ -6,14 +6,15 @@ import { test, expect } from '@playwright/test';
  * nodes render, and the chain visibly grows over time. This is the one layer the Vitest/jsdom
  * suite structurally cannot cover, since jsdom has no Worker/rAF-driven real-time loop.
  */
-test('the scenario picker blocks the sim until a mode is chosen', async ({ page }) => {
+test('the start screen blocks the sim until start is pressed', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('choose how the network starts')).toBeVisible();
+  const start = page.getByRole('button', { name: /^start$/i });
+  await expect(start).toBeVisible();
 
-  // Nothing mines before a choice is made — the network graph is present underneath but the
-  // picker overlay sits on top of it.
-  await page.getByRole('button', { name: /random/i }).click();
-  await expect(page.getByText('choose how the network starts')).toBeHidden();
+  // Nothing mines before start is pressed — the network graph is present underneath but the
+  // overlay sits on top of it.
+  await start.click();
+  await expect(start).toBeHidden();
 });
 
 // Hidden behind SHOW_SCRIPTED_SCENARIO in ScenarioPicker for now — re-enable alongside it.
@@ -33,7 +34,7 @@ test.skip('picking the 64-block scenario seeds the chain instantly, paused on th
 
 test('the network graph renders all nodes and the chain grows as the sim runs', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /random/i }).click();
+  await page.getByRole('button', { name: /^start$/i }).click();
 
   // All 10 full nodes and 5 miners should be labeled on the network graph.
   for (const id of ['N1', 'N2', 'M1', 'M2', 'M5']) {
@@ -53,7 +54,7 @@ test('the network graph renders all nodes and the chain grows as the sim runs', 
 
 test('switching to the merkle tab renders it, and back to network works', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /random/i }).click();
+  await page.getByRole('button', { name: /^start$/i }).click();
 
   await page.getByRole('button', { name: 'merkle' }).click();
   await expect(page.getByRole('button', { name: 'merkle' })).toHaveClass(/active/);

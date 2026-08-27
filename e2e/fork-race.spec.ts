@@ -4,7 +4,7 @@ test.setTimeout(240_000); // the expects below wait up to 60s+60s+120s
 
 test('the Fork scenario produces two rival blocks at one height, then resolves', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /random/i }).click();
+  await page.getByRole('button', { name: /^start$/i }).click();
   await page.getByRole('button', { name: /^fork$/i }).click();
 
   const log = page.locator('body');
