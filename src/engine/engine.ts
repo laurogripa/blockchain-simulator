@@ -234,7 +234,6 @@ export class SimEngine {
 
   // ---- networking / propagation ----
   private schedulePacket(from: NodeId, to: NodeId, kind: PacketKind, payloadHash: Hash, onArrive: () => void) {
-    if (this.isCut(from, to)) return;
     const latency = edgeLatency(this.edges, from, to, this.rng, this.propagationStretch);
     const packet: Packet = {
       id: nextId('pkt'),
@@ -255,14 +254,6 @@ export class SimEngine {
         this.dirty = true;
       },
     });
-  }
-
-  private isCut(a: NodeId, b: NodeId): boolean {
-    const na = this.nodes.get(a);
-    const nb = this.nodes.get(b);
-    if (!na || !nb) return true;
-    if (!na.partitioned || !nb.partitioned) return false;
-    return na.partitionGroup !== nb.partitionGroup;
   }
 
   private floodBlock(fromId: NodeId, block: Block, excludeId?: NodeId) {
@@ -612,32 +603,6 @@ export class SimEngine {
     this.edges.push({ a, b, baseLatencyMs: this.rng.range(40, 250) });
   }
 
-  partition() {
-    // alternate so both halves get miners — a half with no hashpower can't fork at all
-    let i = 0;
-    for (const node of this.nodes.values()) {
-      node.partitioned = true;
-      node.partitionGroup = (i % 2) + 1;
-      i++;
-    }
-    this.logEvent('partition', 'network partitioned into two groups — each half keeps mining its own chain');
-    this.dirty = true;
-  }
-
-  heal() {
-    for (const node of this.nodes.values()) {
-      node.partitioned = false;
-      node.partitionGroup = 0;
-    }
-    this.logEvent('heal', 'partition healed — each side announces its tip; the chain with more work wins, the other side reorgs');
-    // flood each node's known tip to all peers to trigger reconciliation
-    for (const node of this.nodes.values()) {
-      const tipBlock = this.blocks.get(node.tip);
-      if (tipBlock) this.floodBlock(node.id, tipBlock);
-    }
-    this.dirty = true;
-  }
-
   // ---- scripted 64-block scenario ----
   /**
    * Replaces the (still-genesis-only, since this must run before start()) chain with the
@@ -766,8 +731,6 @@ export class SimEngine {
         mempoolSize: n.mempool.size,
         utxoCount: n.utxo.size,
         reorgFlashUntil: n.reorgFlashUntil,
-        partitioned: n.partitioned,
-        partitionGroup: n.partitionGroup,
         clientVersion: n.clientVersion,
         peers: n.peers,
         rules: n.rules.name,
@@ -825,7 +788,6 @@ export class SimEngine {
       events: this.events.slice(-LOG_RING_SIZE),
       focusedNode: state.focusedNode || FULL_NODE_IDS[0],
       networkEdges: this.edges.map((e) => ({ a: e.a, b: e.b })),
-      partitionActive: Array.from(this.nodes.values()).some((n) => n.partitioned),
       lastMinedBy: this.lastMinedBy,
       forks: Array.from(this.forkRecords.values()).map((f) => ({ ...f, branches: f.branches.map((b) => ({ ...b, supporters: b.supporters.slice() })), narrative: f.narrative.slice() })),
       raceActive: this.race !== null,

@@ -14,7 +14,7 @@ import { serializeTx } from './serialize';
 import { sha256Hex } from './crypto/sha256';
 import type { Block, Hash, Miner, PeerNode, Transaction } from './types';
 
-export type ScenarioKind = 'accidentalFork' | 'partition' | 'heal' | 'doubleSpend';
+export type ScenarioKind = 'accidentalFork' | 'doubleSpend';
 
 // Mining at the real DIFFICULTY_BITS (2^20 expected hashes/block) is fine for the throttled,
 // worker-driven live sim but far too slow to brute-force synchronously 64 times over — this is

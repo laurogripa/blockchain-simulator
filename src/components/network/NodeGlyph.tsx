@@ -53,7 +53,6 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
           fill={fill}
           stroke={isFocused ? '#fff' : 'var(--border)'}
           strokeWidth={isFocused ? 2.5 : 1}
-          opacity={node.partitioned ? 0.5 : 1}
         />
       ) : (
         <circle
@@ -61,7 +60,6 @@ export function NodeGlyph({ node }: NodeGlyphProps) {
           fill={fill}
           stroke={isFocused ? '#fff' : 'var(--border)'}
           strokeWidth={isFocused ? 2.5 : 1}
-          opacity={node.partitioned ? 0.5 : 1}
         />
       )}
       {node.mempoolSize > 0 && (

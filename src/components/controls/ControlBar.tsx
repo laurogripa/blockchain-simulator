@@ -7,7 +7,6 @@ import { useSimStore } from '../../store/useSimStore';
 export function ControlBar() {
   const [running, setRunning] = useState(engine.running);
   const [mode, setMode] = useState(engine.mode);
-  const partitionActive = useSimStore((s) => s.partitionActive);
   const focusedNode = useSimStore((s) => s.focusedNode);
   const raceActive = useSimStore((s) => s.raceActive);
   const hardForked = useSimStore((s) => s.hardForkHeight !== null);
@@ -68,12 +67,6 @@ export function ControlBar() {
         onClick={() => engine.hardFork()}
       >
         {hardForked ? 'hard forked' : 'hard fork'}
-      </button>
-      <button
-        className={partitionActive ? 'active' : ''}
-        onClick={() => (partitionActive ? engine.heal() : engine.partition())}
-      >
-        {partitionActive ? 'heal' : 'partition'}
       </button>
 
       <div style={{ flex: 1 }} />

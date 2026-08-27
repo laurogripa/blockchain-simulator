@@ -54,8 +54,6 @@ You can also trigger it on purpose:
 | Button | What it does |
 |---|---|
 | **Fork** | Has two miners solve the same height within propagation latency — the first announces, the second finds its own before that block reaches it — guaranteeing a fork you can watch resolve. |
-| **Partition** | Cuts the network in half. Each half keeps mining, unaware of the other. |
-| **Heal** | Reconnects the network. Whichever half fell behind does a **reorg** — it throws away its blocks and adopts the winning chain. |
 
 ---
 

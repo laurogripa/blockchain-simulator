@@ -36,8 +36,6 @@ export function makePeerNode(
     utxo: new Map(),
     advertisedTip: new Map(),
     reorgFlashUntil: -1,
-    partitioned: false,
-    partitionGroup: 0,
     rules: { name: 'legacy', forkHeight: Infinity },
     rejected: new Map(),
   };

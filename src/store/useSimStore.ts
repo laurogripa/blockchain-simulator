@@ -10,8 +10,6 @@ export interface NodeView {
   mempoolSize: number;
   utxoCount: number;
   reorgFlashUntil: number;
-  partitioned: boolean;
-  partitionGroup: number;
   clientVersion: string;
   peers: NodeId[];
   rules: Ruleset;
@@ -56,7 +54,6 @@ interface SimStoreState {
   selectedTx: Txid | null;
   events: LogEvent[];
   networkEdges: { a: NodeId; b: NodeId }[];
-  partitionActive: boolean;
   inspectedBlock: Hash | null; // drives BlockModal
   inspectedMiner: NodeId | null; // drives MinerModal
   inspectedNode: NodeId | null; // drives NodeModal (full nodes)
@@ -92,7 +89,6 @@ export const useSimStore = create<SimStoreState>((set) => ({
   selectedTx: null,
   events: [],
   networkEdges: [],
-  partitionActive: false,
   inspectedBlock: null,
   inspectedMiner: null,
   inspectedNode: null,

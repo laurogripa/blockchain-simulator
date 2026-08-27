@@ -53,7 +53,6 @@ export function NodeModal() {
           <span>{node.clientVersion}</span>
           <span>mempool {mempoolTxs.length}</span>
           <span>utxo {utxoEntries.length}</span>
-          {nodeView.partitioned && <span style={{ color: 'var(--danger)' }}>partitioned (group {nodeView.partitionGroup})</span>}
           <span style={{ color: node.rules.name === 'big' ? 'var(--danger)' : undefined }}>{node.rules.name} rules{node.rules.name === 'big' ? ` from h${node.rules.forkHeight}` : ''}</span>
         </div>
         <div className="mono" style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 10, fontStyle: 'italic' }}>

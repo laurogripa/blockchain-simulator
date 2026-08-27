@@ -18,8 +18,7 @@ export function NetworkGraph() {
           const a = allNodes[e.a];
           const b = allNodes[e.b];
           if (!a || !b) return null;
-          const dimmed = a.partitioned && b.partitioned && a.partitionGroup !== b.partitionGroup;
-          return <EdgeLine key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} dimmed={dimmed} />;
+          return <EdgeLine key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
         })}
       </g>
       <PacketLayer nodes={allNodes} />

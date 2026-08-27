@@ -81,8 +81,6 @@ export interface PeerNode {
   utxo: Map<Outpoint, UtxoEntry>;
   advertisedTip: Map<NodeId, Hash>;
   reorgFlashUntil: SimTime;
-  partitioned: boolean;
-  partitionGroup: number; // 0 = none
   rules: NodeRules;
   rejected: Map<Hash, string>; // blocks this node refused, and why (consensus-rule violations)
 }
@@ -128,7 +126,7 @@ export interface ReorgEvent {
 export interface LogEvent {
   id: string;
   at: SimTime;
-  kind: 'block' | 'tx' | 'reorg' | 'fork' | 'heal' | 'partition' | 'tie' | 'reject' | 'split' | 'resolve';
+  kind: 'block' | 'tx' | 'reorg' | 'fork' | 'tie' | 'reject' | 'split' | 'resolve';
   text: string;
 }
 

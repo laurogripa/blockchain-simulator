@@ -11,8 +11,6 @@ const KIND_COLOR: Record<LogEvent['kind'], string> = {
   resolve: 'var(--good)',
   reject: 'var(--danger)',
   split: 'var(--danger)',
-  heal: 'var(--good)',
-  partition: 'var(--danger)',
 };
 
 const QUIET: LogEvent['kind'][] = ['block', 'tx'];

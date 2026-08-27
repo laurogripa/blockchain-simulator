@@ -14,8 +14,6 @@ function makeFullNode(overrides: Partial<NodeView> = {}): NodeView {
     mempoolSize: 0,
     utxoCount: 0,
     reorgFlashUntil: -1,
-    partitioned: false,
-    partitionGroup: 0,
     clientVersion: 'Bitcoin Core 26.0',
     peers: [],
     rules: 'legacy',
