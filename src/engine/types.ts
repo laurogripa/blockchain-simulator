@@ -126,7 +126,7 @@ export interface ReorgEvent {
 export interface LogEvent {
   id: string;
   at: SimTime;
-  kind: 'block' | 'tx' | 'reorg' | 'fork' | 'tie' | 'reject' | 'split' | 'resolve';
+  kind: 'mining' | 'block' | 'tx' | 'reorg' | 'fork' | 'tie' | 'reject' | 'split' | 'resolve';
   text: string;
 }
 

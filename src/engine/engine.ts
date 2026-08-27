@@ -87,6 +87,8 @@ export class SimEngine {
   dirty = true;
   packets: Packet[] = [];
   events: LogEvent[] = [];
+  /** The live "M1 mining h5…" line per miner; rewritten in place when the attempt ends. */
+  private miningLog = new Map<NodeId, LogEvent>();
 
   lastReal = 0;
   lastTxGenAt = 0;
@@ -348,6 +350,7 @@ export class SimEngine {
     if (miner.template.header.prevHash === miner.tip) return;
     const attempt = miner.attempts[miner.attempts.length - 1];
     if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow; // superseded
+    this.abandonMiningLog(minerId, 'tip moved');
     this.workers.get(minerId)!.postMessage({ type: 'stop' });
     this.boosted.delete(minerId);
     miner.template = null;
@@ -385,6 +388,7 @@ export class SimEngine {
       solvedBlockHash: null,
     });
     if (miner.attempts.length > MAX_ATTEMPTS_PER_MINER) miner.attempts.shift();
+    this.miningLog.set(minerId, this.logEvent('mining', this.miningText(minerId, parent, txs.length, 0)));
     this.startGrinding(minerId);
     this.dirty = true;
   }
@@ -415,6 +419,8 @@ export class SimEngine {
     if (msg.type === 'progress') {
       miner.hashesDone = msg.hashesTried;
       if (currentAttempt) currentAttempt.hashesTried = msg.hashesTried;
+      const live = this.miningLog.get(minerId);
+      if (live) live.text = this.miningText(minerId, this.blocks.get(miner.template.header.prevHash)!, miner.template.txs.length, msg.hashesTried);
       this.dirty = true;
     } else if (msg.type === 'solved') {
       const parent = this.blocks.get(miner.template.header.prevHash)!;
@@ -461,7 +467,17 @@ export class SimEngine {
     if (!before) this.floodBlock(minerId, block);
     this.lastMinedBy = minerId;
     const rules = blockRuleset(block) === 'big' ? ', big rules' : '';
-    this.logEvent('block', `${minerId} mined h${block.height} on ${this.blocks.get(block.header.prevHash)?.minedBy ?? 'genesis'}'s h${block.height - 1} (${block.txs.length} txs, nonce ${block.header.nonce}${rules})`);
+    const text = `${minerId} mined h${block.height} on ${this.blocks.get(block.header.prevHash)?.minedBy ?? 'genesis'}'s h${block.height - 1} (${block.txs.length} txs, nonce ${block.header.nonce}${rules})`;
+    const live = this.miningLog.get(minerId);
+    if (live) {
+      // the attempt line becomes the result line, so the log reads "mining… → mined"
+      live.kind = 'block';
+      live.at = this.simNow;
+      live.text = text;
+      this.miningLog.delete(minerId);
+    } else {
+      this.logEvent('block', text);
+    }
     if (reorg) this.logEvent('reorg', `${minerId} reorg depth ${reorg.depth}`);
     this.dirty = true;
   }
@@ -548,6 +564,7 @@ export class SimEngine {
     if (m.status === 'grinding') this.workers.get(id)!.postMessage({ type: 'stop' });
     const attempt = m.attempts[m.attempts.length - 1];
     if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow;
+    this.abandonMiningLog(id, 'paused');
     this.boosted.delete(id);
     m.template = null;
     m.hashesDone = 0;
@@ -585,6 +602,7 @@ export class SimEngine {
       this.workers.get(id)!.postMessage({ type: 'stop' });
       const attempt = m.attempts[m.attempts.length - 1];
       if (attempt && attempt.endedAt === null) attempt.endedAt = this.simNow;
+      this.abandonMiningLog(id, 'switching rules');
       m.template = null;
       m.status = 'idle';
     }
@@ -639,9 +657,24 @@ export class SimEngine {
     this.running = running;
   }
 
-  private logEvent(kind: LogEvent['kind'], text: string) {
-    this.events.push({ id: nextId('ev'), at: this.simNow, kind, text });
+  private logEvent(kind: LogEvent['kind'], text: string): LogEvent {
+    const ev: LogEvent = { id: nextId('ev'), at: this.simNow, kind, text };
+    this.events.push(ev);
     if (this.events.length > LOG_RING_SIZE) this.events.shift();
+    return ev;
+  }
+
+  private miningText(minerId: NodeId, parent: Block, txCount: number, hashes: number): string {
+    return `${minerId} mining h${parent.height + 1} on ${parent.minedBy}'s h${parent.height} (${txCount} txs) — ${hashes.toLocaleString()} hashes tried…`;
+  }
+
+  /** The attempt ended without a block: keep the line but say why, so the log never shows a
+   *  miner "still mining" something it dropped. */
+  private abandonMiningLog(minerId: NodeId, why: string) {
+    const live = this.miningLog.get(minerId);
+    if (!live) return;
+    live.text = live.text.replace(/ — .*$/, ` — abandoned (${why})`);
+    this.miningLog.delete(minerId);
   }
 
   // ---- fork bookkeeping ----

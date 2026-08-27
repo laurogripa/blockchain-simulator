@@ -3,6 +3,7 @@ import { useSimStore } from '../../store/useSimStore';
 import type { LogEvent } from '../../engine/types';
 
 const KIND_COLOR: Record<LogEvent['kind'], string> = {
+  mining: 'var(--text-dim)',
   block: 'var(--text-dim)',
   tx: 'var(--text-dim)',
   reorg: 'var(--danger)',
@@ -13,7 +14,7 @@ const KIND_COLOR: Record<LogEvent['kind'], string> = {
   split: 'var(--danger)',
 };
 
-const QUIET: LogEvent['kind'][] = ['block', 'tx'];
+const QUIET: LogEvent['kind'][] = ['mining', 'block', 'tx'];
 
 /** The engine's narration, newest at the bottom: every fork, tie-break, reorg, rejection and
  *  resolution says which node did what and why. Block/tx lines are dimmed as background. */
