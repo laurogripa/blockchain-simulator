@@ -4,6 +4,8 @@ Watch a small Bitcoin-style network mine real blocks, spread them, and fight ove
 
 No signup. No backend. Nothing to read before you start — just press play and watch.
 
+![Blockchain Simulator screenshot](docs/screenshot.png)
+
 ---
 
 ## Run it
