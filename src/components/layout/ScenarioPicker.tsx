@@ -63,14 +63,9 @@ export function ScenarioPicker({ engine, onPick }: ScenarioPickerProps) {
               transactions, miners race to solve real proof-of-work, and every block they find
               is broadcast, validated, and chained — or orphaned when two miners tie.
             </p>
-            <p style={{ margin: '0 0 10px' }}>
-              Built to teach how a blockchain actually works. Watch the mempool fill, click a
-              block to inspect its Merkle tree and transactions, follow a fork as the network
-              picks a winner, or trigger a fork and hard-fork split yourself to see consensus
-              hold — and break.
-            </p>
             <p style={{ margin: 0 }}>
-              Nothing is scripted: forks and reorgs happen (or don’t) by chance, every run.
+              Made for learning how a blockchain works. Click nodes and blocks to inspect them,
+              use the fork buttons to break consensus, and watch how the network recovers.
             </p>
           </div>
         )}
