@@ -39,21 +39,27 @@ const MAX_ATTEMPTS_PER_MINER = 25;
 let seq = 0;
 const nextId = (p: string) => `${p}${seq++}`;
 
-interface PendingSolution {
-  minerId: NodeId;
+interface DeferredArrival {
+  nodeId: NodeId;
   block: Block;
+  fromId: NodeId;
 }
 
 /**
- * A scripted "simultaneous solve": two miners' solutions are held back until both exist, then
- * announced in the same instant. `roundsLeft` > 1 repeats it on top of the two fresh branches,
- * producing the (rare in real life) fork that stays tied for several blocks.
+ * A scripted "simultaneous solve": two miners grind the same parent; the first to solve announces
+ * right away, but its block is treated as still in flight to the rival, which keeps grinding
+ * until it finds its own — so both really do solve the same height, each unaware of the other,
+ * exactly as happens in Bitcoin when two blocks land within propagation latency. `roundsLeft` > 1
+ * repeats it on top of the two fresh branches, producing the (rare in real life) fork that stays
+ * tied for several blocks.
  */
 interface ForkRace {
   miners: [NodeId, NodeId];
   roundsLeft: number;
   round: number;
   phase: 'arming' | 'racing' | 'settling'; // arming = waiting for both racers to share a tip
+  solved: Hash[]; // this round's solutions, in the order they were found
+  deferred: DeferredArrival[]; // rival blocks held "in flight" from a racer still grinding
   released: Hash[]; // blocks announced in the last round — round N+1 waits until every node has them
   pausedMiners: NodeId[];
 }
@@ -89,8 +95,6 @@ export class SimEngine {
   rafHandle = 0;
 
   // scenario state
-  gatedAnnouncements: PendingSolution[] | null = null; // when set, solutions accumulate here
-  gateMiners = new Set<NodeId>();
   race: ForkRace | null = null;
   hardForkHeight: number | null = null;
   lastMinedBy: NodeId | null = null;
@@ -193,10 +197,9 @@ export class SimEngine {
       for (const id of MINER_IDS) {
         const m = this.nodes.get(id) as Miner;
         if (m.status !== 'idle') continue;
-        // a racing miner must not run ahead of the scripted race: not while its solution is
-        // held for its rival, and not while the network is still absorbing the last round
-        if (this.gateMiners.has(id) && this.gatedAnnouncements?.some((p) => p.minerId === id)) continue;
-        if (this.race && this.race.phase !== 'racing' && this.race.miners.includes(id)) continue;
+        // a racing miner must not run ahead of the scripted race: not once it has solved this
+        // round (its rival is still grinding), and not while the network absorbs the last round
+        if (this.race?.miners.includes(id) && (this.race.phase !== 'racing' || this.raceSolvedBy(id))) continue;
         this.ensureMinerTemplate(id);
       }
     }
@@ -305,6 +308,13 @@ export class SimEngine {
   private handleBlockArrival(nodeId: NodeId, block: Block, fromId: NodeId) {
     const node = this.nodes.get(nodeId);
     if (!node) return;
+    // Mid-race, the first solution is still "in flight" to the rival racer: it keeps grinding
+    // on the shared parent, none the wiser, until it finds its own block.
+    const race = this.race;
+    if (race?.phase === 'racing' && race.miners.includes(nodeId) && race.solved.includes(block.hash) && !this.raceSolvedBy(nodeId)) {
+      race.deferred.push({ nodeId, block, fromId });
+      return;
+    }
     const before = node.known.has(block.hash);
     const prevTip = node.tip;
     const { isNewBest, reorg, rejected, tieKept } = receiveBlock(this.blocks, node, block, this.simNow);
@@ -433,12 +443,20 @@ export class SimEngine {
     }
   }
 
+  private raceSolvedBy(minerId: NodeId): boolean {
+    return !!this.race?.solved.some((h) => this.blocks.get(h)?.minedBy === minerId);
+  }
+
   private onBlockSolved(minerId: NodeId, block: Block) {
-    if (this.gateMiners.has(minerId) && this.gatedAnnouncements) {
-      this.gatedAnnouncements.push({ minerId, block });
-      this.logEvent('fork', `${minerId} found a valid h${block.height} (hash ${block.hash.slice(0, 8)}…, nonce ${block.header.nonce}) — held until its rival solves too`);
-      if (this.gatedAnnouncements.length >= this.gateMiners.size) {
-        this.releaseGatedAnnouncements();
+    const race = this.race;
+    if (race?.phase === 'racing' && race.miners.includes(minerId)) {
+      race.solved.push(block.hash);
+      this.announceBlock(minerId, block);
+      const rival = race.miners.find((id) => id !== minerId)!;
+      if (race.solved.length < race.miners.length) {
+        this.logEvent('fork', `${minerId} solves h${block.height} (${block.hash.slice(0, 8)}…, nonce ${block.header.nonce}) and announces it — ${rival} hasn't heard yet and keeps grinding the same parent`);
+      } else {
+        this.finishRaceRound(minerId, block);
       }
       return;
     }
@@ -457,23 +475,20 @@ export class SimEngine {
     this.dirty = true;
   }
 
-  private releaseGatedAnnouncements() {
-    const pending = this.gatedAnnouncements!;
-    this.gatedAnnouncements = null;
-    this.gateMiners.clear();
-    const [a, b] = pending;
-    if (a && b) {
-      const sameParent = a.block.header.prevHash === b.block.header.prevHash;
-      this.logEvent('fork', `both announce h${a.block.height} at the same instant: ${a.minerId} ${a.block.hash.slice(0, 8)}… vs ${b.minerId} ${b.block.hash.slice(0, 8)}… — ${sameParent ? 'same parent, ' : 'each on its own branch, '}same work, different nonces; every node keeps whichever reaches it first`);
-    }
-    for (const { minerId, block } of pending) {
-      this.announceBlock(minerId, block);
-    }
-    if (this.race) {
-      this.race.released = pending.map((p) => p.block.hash);
-      this.race.roundsLeft--;
-      this.race.phase = 'settling';
-    }
+  /** The rival has just found its own block: the first solution's delivery now "lands", and the
+   *  network holds two equal-work blocks at the same height. */
+  private finishRaceRound(minerId: NodeId, block: Block) {
+    const race = this.race!;
+    const first = this.blocks.get(race.solved[0])!;
+    const sameParent = first.header.prevHash === block.header.prevHash;
+    this.logEvent('fork', `${minerId} solves its own h${block.height} (${block.hash.slice(0, 8)}…, nonce ${block.header.nonce}) before ${first.minedBy}'s reaches it — ${sameParent ? 'same parent, ' : 'each on its own branch, '}same work, different nonces; every node keeps whichever reaches it first`);
+    race.released = race.solved.slice();
+    race.solved = [];
+    race.roundsLeft--;
+    race.phase = 'settling';
+    const deferred = race.deferred;
+    race.deferred = [];
+    for (const d of deferred) this.handleBlockArrival(d.nodeId, d.block, d.fromId);
   }
 
   // ---- scenarios ----
@@ -488,7 +503,7 @@ export class SimEngine {
     const miners: [NodeId, NodeId] = ['M1', 'M2'];
     const paused = MINER_IDS.filter((id) => !miners.includes(id));
     for (const id of paused) this.pauseMiner(id);
-    this.race = { miners, roundsLeft: depth, round: 0, phase: 'arming', released: [], pausedMiners: paused };
+    this.race = { miners, roundsLeft: depth, round: 0, phase: 'arming', solved: [], deferred: [], released: [], pausedMiners: paused };
     const tip = this.blocks.get(this.nodes.get('M1')!.tip)!;
     this.logEvent('fork', `accidental fork staged at h${tip.height + 1}: M1 and M2 race on the same parent (${paused.join(',')} paused for the demo)${depth > 1 ? `, tied for ${depth} rounds` : ''}`);
     this.advanceRace();
@@ -498,8 +513,8 @@ export class SimEngine {
     const race = this.race!;
     race.round++;
     race.phase = 'racing';
-    this.gateMiners = new Set(race.miners);
-    this.gatedAnnouncements = [];
+    race.solved = [];
+    race.deferred = [];
     for (const id of race.miners) {
       const m = this.nodes.get(id) as Miner;
       if (m.status === 'grinding' && m.template?.header.prevHash !== m.tip) this.restartMinerIfStale(id);

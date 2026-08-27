@@ -16,7 +16,8 @@ test('the scenario picker blocks the sim until a mode is chosen', async ({ page 
   await expect(page.getByText('choose how the network starts')).toBeHidden();
 });
 
-test('picking the 64-block scenario seeds the chain instantly, paused on the final frame', async ({ page }) => {
+// Hidden behind SHOW_SCRIPTED_SCENARIO in ScenarioPicker for now — re-enable alongside it.
+test.skip('picking the 64-block scenario seeds the chain instantly, paused on the final frame', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /64-block scenario/i }).click();
 

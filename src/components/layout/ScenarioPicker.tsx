@@ -1,6 +1,12 @@
 import { SCENARIO_LENGTH } from '../../engine/scenarios';
 import type { SimEngine } from '../../engine/engine';
 
+/**
+ * Temporarily hidden: the scripted scenario currently seeds its history instantly rather than
+ * replaying it. Flip this back on once the genesis→64 reconstruction lands (see GOALS.md).
+ */
+export const SHOW_SCRIPTED_SCENARIO = false;
+
 interface ScenarioPickerProps {
   engine: SimEngine;
   onPick: () => void;
@@ -60,6 +66,7 @@ export function ScenarioPicker({ engine, onPick }: ScenarioPickerProps) {
             </div>
           </button>
 
+          {SHOW_SCRIPTED_SCENARIO && (
           <button
             onClick={() => pick('scripted')}
             className="active"
@@ -74,12 +81,15 @@ export function ScenarioPicker({ engine, onPick }: ScenarioPickerProps) {
               still in progress.
             </div>
           </button>
+          )}
         </div>
 
-        <div className="mono" style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 18 }}>
-          {SCENARIO_LENGTH - 1} scripted blocks are seeded instantly; mining continues live from
-          there either way.
-        </div>
+        {SHOW_SCRIPTED_SCENARIO && (
+          <div className="mono" style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 18 }}>
+            {SCENARIO_LENGTH - 1} scripted blocks are seeded instantly; mining continues live from
+            there either way.
+          </div>
+        )}
       </div>
     </div>
   );

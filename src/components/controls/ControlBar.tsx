@@ -47,7 +47,7 @@ export function ControlBar() {
       <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
 
       <button
-        title="M1 and M2 solve the same height at the same instant; the very next block settles it"
+        title="M1 and M2 each solve the same height before the other's block reaches them; the very next block settles it"
         className={raceActive ? 'active' : ''}
         disabled={scenarioBusy}
         onClick={() => engine.runAccidentalFork(1)}
